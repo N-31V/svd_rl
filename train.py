@@ -19,6 +19,7 @@ BATCH_SIZE = 32
 REPLAY_SIZE = 1000
 REPLAY_START_SIZE = 300
 SYNC_TARGET_FRAMES = 50
+DEVICE = 'cuda'
 
 
 def calc_loss(batch, agent):
@@ -37,15 +38,14 @@ if __name__ == "__main__":
     current_time = datetime.now().strftime("%b%d_%H-%M-%S")
     param_str = f'G{GAMMA}_B{BATCH_SIZE}_R{REPLAY_SIZE}_{REPLAY_START_SIZE}_S{SYNC_TARGET_FRAMES}'
     path = os.path.join(ROOT, param_str, current_time)
-    device = 'cuda:1'
 
-    env = SVDEnv(f1_baseline=0.775, device=device)
-    writer = SummaryWriter(log_dir=path)
-    agent = DQNAgent(obs_len=len(env.state()), n_actions=env.n_actions(), device=device)
+    env = SVDEnv(f1_baseline=0.775, device=DEVICE)
+    agent = DQNAgent(obs_len=len(env.state()), n_actions=env.n_actions(), device=DEVICE)
     buffer = ExperienceBuffer(capacity=1000)
-    source = ExperienceSource(env=env, agent=agent, buffer=buffer, writer=writer)
-    optimizer = torch.optim.Adam(agent.model.parameters())
+    source = ExperienceSource(env=env, agent=agent, buffer=buffer)
 
+    writer = SummaryWriter(log_dir=path)
+    optimizer = torch.optim.Adam(agent.model.parameters())
     total_rewards = []
     best_mean_reward = None
     epochs = 0

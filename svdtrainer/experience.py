@@ -26,11 +26,10 @@ class ExperienceBuffer:
 
 
 class ExperienceSource:
-    def __init__(self, env: SVDEnv, agent: DQNAgent, buffer: ExperienceBuffer, writer: SummaryWriter):
+    def __init__(self, env: SVDEnv, agent: DQNAgent, buffer: ExperienceBuffer):
         self.env = env
         self.agent = agent
         self.buffer = buffer
-        self.writer = writer
         self.state = self.env.reset()
         self.total_reward = 0
 
