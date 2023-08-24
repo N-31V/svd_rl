@@ -36,7 +36,9 @@ class SVDEnv:
             dataset: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
             model: Type[torch.nn.Module] = resnet18,
             epochs: int = 30,
+            device: str = 'cuda'
     ) -> None:
+        self.device = device
         self.dataset: Dataset = dataset
         train_ds, val_ds = train_test_split(dataset)
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
@@ -62,7 +64,7 @@ class SVDEnv:
         model = self.model(num_classes=num_classes)
         decompose_module(model=model, forward_mode='two_layers')
         self.decomposition = False
-        self.exp = ClassificationExperimenter(model=model)
+        self.exp = ClassificationExperimenter(model=model, device=self.device)
         self.epoch = 0
         self.optimizer = torch.optim.Adam(self.exp.model.parameters())
         self.base_params = self.exp.number_of_model_params()
