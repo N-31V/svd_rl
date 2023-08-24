@@ -3,8 +3,8 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from enviroment import SVDEnv
-from agent import DQNAgent
+from svdtrainer.enviroment import SVDEnv
+from svdtrainer.agent import DQNAgent
 
 Experience = collections.namedtuple('Experience', ['states', 'actions', 'rewards', 'dones', 'next_states'])
 
@@ -36,7 +36,6 @@ class ExperienceSource:
 
     def generate(self):
         result = None
-
         action = self.agent(self.state)
         state, reward, done = self.env.step(action)
         self.total_reward += reward

@@ -1,7 +1,8 @@
+from typing import Optional
 import copy
 import torch
 
-from models import SimpleFFDQN
+from svdtrainer.models import SimpleFFDQN
 
 
 class DQNAgent:
@@ -10,14 +11,18 @@ class DQNAgent:
             self,
             obs_len: int,
             n_actions: int,
+            device: str = 'cuda',
+            weight: Optional[str] = None,
             epsilon_start: float = 1.,
             epsilon_final: float = 0.02,
             epsilon_step: float = 10**-4,
-            device: str = 'cuda'
     ):
         self.device = device
         self.n_actions = n_actions
-        self.model = SimpleFFDQN(obs_len, n_actions).to(self.device)
+        self.model = SimpleFFDQN(obs_len, n_actions)
+        if weight is not None:
+            self.model.load_state_dict(torch.load(weight))
+        self.model = self.model.to(self.device)
         self.target_model = copy.deepcopy(self.model)
         self.epsilon = epsilon_start
         self.epsilon_final = epsilon_final

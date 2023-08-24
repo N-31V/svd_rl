@@ -120,7 +120,7 @@ class SVDEnv:
 
         else:
             print("skip")
-            return self.state(), 0., False
+            return self.state(), -0.001, False
 
     def do_step(self, svd_loss=None) -> Tuple[torch.Tensor, float, bool]:
         self.epoch += 1
