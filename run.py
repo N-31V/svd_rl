@@ -36,3 +36,4 @@ if __name__ == "__main__":
         writer.add_scalar("state/f1, %", state[2], epoch)
         writer.add_scalar("state/size, %", state[3], epoch)
         writer.add_scalar("action", action, epoch)
+    env.exp.save_model('trained_model')

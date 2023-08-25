@@ -1,5 +1,5 @@
 import os
-
+import logging
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
 from torchvision.datasets import CIFAR10
@@ -7,6 +7,7 @@ from torchvision.transforms import ToTensor
 from fedot_ind.core.architecture.experiment.nn_experimenter import ClassificationExperimenter, FitParameters
 
 
+logging.basicConfig(level=logging.INFO)
 DATASETS_ROOT = '/media/n31v/data/datasets/'
 
 

@@ -33,14 +33,13 @@ class SVDEnv:
     def __init__(
             self,
             f1_baseline: float,
-            dataset: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
+            train_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
+            val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor()),
             model: Type[torch.nn.Module] = resnet18,
             epochs: int = 30,
             device: str = 'cuda'
     ) -> None:
         self.device = device
-        self.dataset: Dataset = dataset
-        train_ds, val_ds = train_test_split(dataset)
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
         self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
         self.model: Type[torch.nn.Module] = model
@@ -60,7 +59,7 @@ class SVDEnv:
         return torch.Tensor([float(self.decomposition), self.epoch / self.epochs, self.last_f1, self.last_params])
 
     def reset(self):
-        num_classes = len(self.dataset.class_to_idx)
+        num_classes = len(self.train_dl.dataset.class_to_idx)
         model = self.model(num_classes=num_classes)
         decompose_module(model=model, forward_mode='two_layers')
         self.decomposition = False
