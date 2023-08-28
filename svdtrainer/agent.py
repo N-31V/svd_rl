@@ -21,7 +21,7 @@ class DQNAgent:
         self.n_actions = n_actions
         self.model = SimpleFFDQN(obs_len, n_actions)
         if weight is not None:
-            self.model.load_state_dict(torch.load(weight))
+            self.model.load_state_dict(torch.load(weight, map_location=self.device))
         self.model = self.model.to(self.device)
         self.target_model = copy.deepcopy(self.model)
         self.epsilon = epsilon_start
