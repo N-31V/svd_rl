@@ -1,3 +1,4 @@
+"""Agent training module."""
 import os
 import warnings
 import numpy as np
@@ -9,45 +10,36 @@ from torch.utils.tensorboard import SummaryWriter
 from svdtrainer.enviroment import SVDEnv
 from svdtrainer.agent import DQNAgent
 from svdtrainer.experience import ExperienceBuffer, ExperienceSource
+from svdtrainer.utils import calc_loss, save_config
+from configs import CONFIGS
+
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
-
 ROOT = '/media/n31v/data/results/SVDRL'
-MEAN_REWARD_BOUND = 1.01
-GAMMA = 1
-LR = 0.0002
-BATCH_SIZE = 16
-REPLAY_SIZE = 100000
-REPLAY_START_SIZE = 1000
-SYNC_TARGET_FRAMES = 100
-F1_BASELINE = 0.776
 DEVICE = 'cuda'
-
-
-def calc_loss(batch, agent):
-    states, actions, rewards, dones, next_states = (x.to(agent.device) for x in batch)
-
-    state_action_values = agent.model(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
-    next_state_values = agent.target_model(next_states).max(1)[0]
-    next_state_values[dones] = 0.0
-    next_state_values = next_state_values.detach()
-
-    expected_state_action_values = next_state_values * GAMMA + rewards
-    return torch.nn.MSELoss()(state_action_values, expected_state_action_values)
+CONFIG = 'base'
 
 
 if __name__ == "__main__":
-    env = SVDEnv(f1_baseline=F1_BASELINE, device=DEVICE)
-    agent = DQNAgent(obs_len=len(env.state()), n_actions=env.n_actions(), device=DEVICE)
-    buffer = ExperienceBuffer(capacity=REPLAY_SIZE)
+    config = CONFIGS[CONFIG]
+    env = SVDEnv(f1_baseline=config.f1_baseline, device=DEVICE)
+    agent = DQNAgent(
+        obs_len=len(env.state()),
+        n_actions=env.n_actions(),
+        device=DEVICE,
+        epsilon_start=config.epsilon_start,
+        epsilon_final=config.epsilon_final,
+        epsilon_step=config.epsilon_step
+    )
+    buffer = ExperienceBuffer(capacity=config.buffer_size)
     source = ExperienceSource(env=env, agent=agent, buffer=buffer)
 
     current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-    param_str = f'A{env.n_actions()}_G{GAMMA}_LR{LR}_B{BATCH_SIZE}_R{REPLAY_SIZE}_{REPLAY_START_SIZE}_S{SYNC_TARGET_FRAMES}'
-    path = os.path.join(ROOT, param_str, current_time)
+    path = os.path.join(ROOT, f'{CONFIG}_{current_time}')
     writer = SummaryWriter(log_dir=path)
+    save_config(config=config, path=path)
 
-    optimizer = torch.optim.Adam(agent.model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(agent.model.parameters(), lr=config.lr)
     total_rewards = []
     best_mean_reward = None
     epochs = 0
@@ -69,19 +61,19 @@ if __name__ == "__main__":
             if best_mean_reward is None or best_mean_reward < mean_reward:
                 torch.save(agent.model.state_dict(), os.path.join(path, 'model.sd.pt'))
                 best_mean_reward = mean_reward
-            if mean_reward > MEAN_REWARD_BOUND:
+            if mean_reward > config.mean_reward_bound:
                 print(f"Solved in {epochs} epochs!")
                 break
 
-        if len(buffer) < REPLAY_START_SIZE:
+        if len(buffer) < config.buffer_start_size:
             continue
 
-        if epochs % SYNC_TARGET_FRAMES == 0:
+        if epochs % config.sync_target_epochs == 0:
             agent.synchronize_target_model()
 
         optimizer.zero_grad()
-        batch = buffer.get_batch(BATCH_SIZE)
-        loss_t = calc_loss(batch, agent)
+        batch = buffer.get_batch(batch_size=config.buffer_size)
+        loss_t = calc_loss(batch=batch, agent=agent, gamma=config.gamma)
         loss_t.backward()
         optimizer.step()
     writer.close()
