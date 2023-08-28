@@ -4,20 +4,25 @@ from datetime import datetime
 from sklearn.exceptions import UndefinedMetricWarning
 from torch.utils.tensorboard import SummaryWriter
 
-from svdtrainer.enviroment import SVDEnv
+from svdtrainer.enviroment import SVDEnv, Actions
 from svdtrainer.agent import DQNAgent
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
-ROOT = '/media/n31v/data/results/SVDRL'
+ROOT = '/media/n31v/data/results/SVDRL/G1_B32_R1000_300_S50/Aug24_10-16-21'
+DEVICE = 'cuda'
 
 
 if __name__ == "__main__":
     current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-    path = os.path.join(ROOT, current_time)
-    device = 'cuda'
-    env = SVDEnv(f1_baseline=0.775, device=device)
-    agent = DQNAgent(obs_len=len(env.state()), n_actions=env.n_actions(), device=device, weight='model0.sd.pt')
+    path = os.path.join(ROOT, f'test_{current_time}')
+    env = SVDEnv(f1_baseline=0.775, device=DEVICE)
+    agent = DQNAgent(
+        obs_len=len(env.state()),
+        n_actions=env.n_actions(),
+        device=DEVICE,
+        weight=os.path.join(ROOT, 'model.sd.pt')
+    )
     writer = SummaryWriter(log_dir=path)
 
     total_reward = 0
@@ -26,7 +31,8 @@ if __name__ == "__main__":
     state = env.reset()
     while not done:
         epoch += 1
-        action = agent(state)
+        action = agent.best_action(state)
+        print(f'{epoch}: {Actions(action)}')
         state, reward, done = env.step(action)
         total_reward += reward
         writer.add_scalar("test_reward/total", total_reward, epoch)
@@ -36,4 +42,4 @@ if __name__ == "__main__":
         writer.add_scalar("state/f1, %", state[2], epoch)
         writer.add_scalar("state/size, %", state[3], epoch)
         writer.add_scalar("action", action, epoch)
-    env.exp.save_model('trained_model')
+    env.exp.save_model(os.path.join(path, 'trained_model'))
