@@ -1,9 +1,18 @@
+"""The module contains the architectures of the agent models."""
 import torch.nn as nn
 
 
 class SimpleFFDQN(nn.Module):
+    """
+    FFDQN model.
+
+    Args:
+        obs_len: Environment state vector size.
+        actions_n: Number of possible actions in the environment.
+    """
     def __init__(self, obs_len, actions_n):
-        super(SimpleFFDQN, self).__init__()
+
+        super().__init__()
 
         self.fc_val = nn.Sequential(
             nn.Linear(obs_len, 512),
