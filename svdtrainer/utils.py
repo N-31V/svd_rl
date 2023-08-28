@@ -1,8 +1,53 @@
 """This module contains helper functions for training."""
 from typing import Tuple
+import collections
+import os
 import torch
 
 from svdtrainer.agent import DQNAgent
+
+
+Config = collections.namedtuple(
+    typename='Config',
+    field_names=[
+        'f1_baseline',
+        'mean_reward_bound',
+        'gamma',
+        'lr',
+        'batch_size',
+        'buffer_size',
+        'buffer_start_size',
+        'sync_target_epochs',
+        'epsilon_start',
+        'epsilon_final',
+        'epsilon_step'
+    ],
+    defaults=[
+        0.776,
+        1.01,
+        1,
+        0.0001,
+        16,
+        100000,
+        1000,
+        100,
+        1.,
+        0.01,
+        10**-4
+    ]
+)
+
+
+def save_config(config: Config, path: str) -> None:
+    """Saves configuration to the file.
+
+    Args:
+        config: Config object.
+        path: Path to the folder.
+    """
+    with open(os.path.join(path, 'config.txt'), "w") as file:
+        for k, v in config._asdict().items():
+            file.write(f'{k}={v}\n')
 
 
 def calc_loss(batch: Tuple, agent: DQNAgent, gamma=0.99) -> torch.Tensor:
