@@ -1,6 +1,7 @@
 """Agent training module."""
 import os
 import warnings
+import argparse
 import numpy as np
 import torch
 from datetime import datetime
@@ -16,17 +17,24 @@ from configs import CONFIGS
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 ROOT = '/media/n31v/data/results/SVDRL'
-DEVICE = 'cuda'
-CONFIG = 'simple_pruning'
+CONFIG = 'simple_dec'
+
+
+def create_parser():
+    parser = argparse.ArgumentParser(description='Train')
+    parser.add_argument('-c', '--config', type=str, help='config name', default=CONFIG)
+    parser.add_argument('-d', '--device', type=str, help='cpu or cuda', default='cuda')
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    config = CONFIGS[CONFIG]
-    env = SVDEnv(allowed_actions=config.actions, f1_baseline=config.f1_baseline, device=DEVICE)
+    args = create_parser()
+    config = CONFIGS[args.config]
+    env = SVDEnv(allowed_actions=config.actions, f1_baseline=config.f1_baseline, device=args.device)
     agent = DQNAgent(
         obs_len=len(env.state()),
         n_actions=env.n_actions(),
-        device=DEVICE,
+        device=args.device,
         epsilon_start=config.epsilon_start,
         epsilon_final=config.epsilon_final,
         epsilon_step=config.epsilon_step
@@ -35,7 +43,7 @@ if __name__ == "__main__":
     source = ExperienceSource(env=env, agent=agent, buffer=buffer)
 
     current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-    path = os.path.join(ROOT, CONFIG, current_time)
+    path = os.path.join(ROOT, args.config, current_time)
     writer = SummaryWriter(log_dir=path)
     save_config(config=config, path=path)
 
