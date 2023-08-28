@@ -10,6 +10,7 @@ from svdtrainer.agent import DQNAgent
 Config = collections.namedtuple(
     typename='Config',
     field_names=[
+        'actions',
         'f1_baseline',
         'mean_reward_bound',
         'gamma',
@@ -29,8 +30,8 @@ Config = collections.namedtuple(
         0.0001,
         16,
         100000,
-        1000,
-        100,
+        500,
+        50,
         1.,
         0.01,
         10**-4

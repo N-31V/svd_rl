@@ -54,6 +54,7 @@ class DQNAgent(Agent):
             epsilon_final: float = 0.01,
             epsilon_step: float = 10**-5,
     ):
+        print(f'Configurate FFDQN model: {obs_len=}, {n_actions=}.')
         super().__init__(
             model=SimpleFFDQN(obs_len, n_actions),
             weight=weight,

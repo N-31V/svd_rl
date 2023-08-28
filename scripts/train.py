@@ -17,12 +17,12 @@ from configs import CONFIGS
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 ROOT = '/media/n31v/data/results/SVDRL'
 DEVICE = 'cuda'
-CONFIG = 'base'
+CONFIG = 'simple_pruning'
 
 
 if __name__ == "__main__":
     config = CONFIGS[CONFIG]
-    env = SVDEnv(f1_baseline=config.f1_baseline, device=DEVICE)
+    env = SVDEnv(allowed_actions=config.actions, f1_baseline=config.f1_baseline, device=DEVICE)
     agent = DQNAgent(
         obs_len=len(env.state()),
         n_actions=env.n_actions(),
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     source = ExperienceSource(env=env, agent=agent, buffer=buffer)
 
     current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-    path = os.path.join(ROOT, f'{CONFIG}_{current_time}')
+    path = os.path.join(ROOT, CONFIG, current_time)
     writer = SummaryWriter(log_dir=path)
     save_config(config=config, path=path)
 

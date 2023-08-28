@@ -1,7 +1,6 @@
 import collections
 import numpy as np
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 from svdtrainer.enviroment import SVDEnv
 from svdtrainer.agent import DQNAgent

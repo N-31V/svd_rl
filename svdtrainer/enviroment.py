@@ -1,4 +1,4 @@
-from typing import Type, Dict, Tuple
+from typing import Type, Dict, Tuple, List
 import os
 import enum
 from functools import partial
@@ -9,7 +9,6 @@ from torchvision.models import resnet18
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import ToTensor
 from fedot_ind.core.architecture.experiment.nn_experimenter import ClassificationExperimenter
-from fedot_ind.core.architecture.datasets.splitters import train_test_split
 from fedot_ind.core.operation.optimization.svd_tools import decompose_module, energy_svd_pruning
 from fedot_ind.core.operation.decomposition.decomposed_conv import DecomposedConv2d
 from fedot_ind.core.metrics.loss.svd_loss import HoyerLoss, OrthogonalLoss
@@ -32,6 +31,7 @@ class Actions(enum.Enum):
 class SVDEnv:
     def __init__(
             self,
+            allowed_actions: List,
             f1_baseline: float,
             train_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
             val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor()),
@@ -40,6 +40,7 @@ class SVDEnv:
             device: str = 'cuda'
     ) -> None:
         self.device = device
+        self.actions = allowed_actions
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
         self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
         self.model: Type[torch.nn.Module] = model
@@ -48,7 +49,7 @@ class SVDEnv:
         self.epochs = epochs
         self.optimizer: torch.optim.Optimizer = None
         self.decomposition: bool = False
-        self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.01)
+        self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
         self.orthogonal_loss: OrthogonalLoss = OrthogonalLoss(factor=10)
         self.base_f1 = f1_baseline
         self.base_params: int = 0
@@ -56,7 +57,12 @@ class SVDEnv:
         self.last_params: float = 1
 
     def state(self):
-        return torch.Tensor([float(self.decomposition), self.epoch / self.epochs, self.last_f1, self.last_params])
+        state = [self.epoch / self.epochs, self.last_f1, self.last_params]
+        if Actions.train_compose in self.actions:
+            state.append(float(self.decomposition))
+        if Actions.increase_hoer in self.actions:
+            state.append(self.hoer_loss.factor)
+        return torch.Tensor(state)
 
     def reset(self):
         num_classes = len(self.train_dl.dataset.class_to_idx)
@@ -69,27 +75,21 @@ class SVDEnv:
         self.base_params = self.exp.number_of_model_params()
         self.last_f1 = 0.
         self.last_params = 1
+        if Actions.train_compose not in self.actions:
+            self.decompose_model()
         return self.state()
 
     def step(self, action):
-        action = Actions(action)
+        action = self.actions[action]
 
         if action == Actions.train_compose:
             if self.decomposition:
-                self.exp._apply_function(
-                    func=self.compose_layer,
-                    condition=self.layer_filer
-                )
-                self.decomposition = False
+                self.compose_model()
             return self.do_step()
 
         if action == Actions.train_decompose:
             if not self.decomposition:
-                self.exp._apply_function(
-                    func=self.decompose_layer,
-                    condition=self.layer_filer
-                )
-                self.decomposition = True
+                self.decompose_model()
             return self.do_step(self.svd_loss)
 
         if self.decomposition:
@@ -145,6 +145,20 @@ class SVDEnv:
             condition=self.layer_filer
         )
 
+    def decompose_model(self):
+        self.exp._apply_function(
+            func=self.decompose_layer,
+            condition=self.layer_filer
+        )
+        self.decomposition = True
+
+    def compose_model(self):
+        self.exp._apply_function(
+            func=self.compose_layer,
+            condition=self.layer_filer
+        )
+        self.decomposition = False
+
     def svd_loss(self, model: torch.nn.Module) -> Dict[str, torch.Tensor]:
         losses = {
             'orthogonal_loss': self.orthogonal_loss(model),
@@ -152,9 +166,8 @@ class SVDEnv:
         }
         return losses
 
-    @staticmethod
-    def n_actions():
-        return len(Actions)
+    def n_actions(self):
+        return len(self.actions)
 
     @staticmethod
     def compose_layer(layer: DecomposedConv2d):
