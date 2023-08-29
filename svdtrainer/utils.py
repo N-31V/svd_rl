@@ -12,6 +12,10 @@ Config = collections.namedtuple(
     field_names=[
         'actions',
         'f1_baseline',
+        'epochs',
+        'start_epoch',
+        'skip_impossible_steps',
+        'running_reward',
         'mean_reward_bound',
         'gamma',
         'lr',
@@ -25,6 +29,10 @@ Config = collections.namedtuple(
     ],
     defaults=[
         0.776,
+        30,
+        0,
+        True,
+        True,
         1.01,
         1,
         0.0001,

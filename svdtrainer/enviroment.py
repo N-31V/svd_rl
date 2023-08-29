@@ -37,21 +37,28 @@ class SVDEnv:
             val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor()),
             model: Type[torch.nn.Module] = resnet18,
             epochs: int = 30,
+            start_epoch: int = 0,
+            skip_impossible_steps: bool = True,
+            running_reward: bool = True,
             device: str = 'cuda'
     ) -> None:
-        self.device = device
+        self.base_f1 = f1_baseline
         self.actions = allowed_actions
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
         self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
         self.model: Type[torch.nn.Module] = model
-        self.exp: ClassificationExperimenter = None
-        self.epoch: int = 0
         self.epochs = epochs
-        self.optimizer: torch.optim.Optimizer = None
-        self.decomposition: bool = False
+        self.start_epoch: int = start_epoch
+        self.skip = skip_impossible_steps
+        self.running_reward = running_reward
+        self.device = device
+
         self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
         self.orthogonal_loss: OrthogonalLoss = OrthogonalLoss(factor=10)
-        self.base_f1 = f1_baseline
+        self.exp: ClassificationExperimenter = None
+        self.optimizer: torch.optim.Optimizer = None
+        self.decomposition: bool = False
+        self.epoch: int = 0
         self.base_params: int = 0
         self.last_f1: float = 0.
         self.last_params: float = 1
@@ -75,6 +82,8 @@ class SVDEnv:
         self.base_params = self.exp.number_of_model_params()
         self.last_f1 = 0.
         self.last_params = 1
+        while self.epoch < self.start_epoch:
+            self.do_step()
         if Actions.train_compose not in self.actions:
             self.decompose_model()
         return self.state()
@@ -85,43 +94,47 @@ class SVDEnv:
         if action == Actions.train_compose:
             if self.decomposition:
                 self.compose_model()
-            return self.do_step()
+            return self._step()
 
         if action == Actions.train_decompose:
             if not self.decomposition:
                 self.decompose_model()
-            return self.do_step(self.svd_loss)
+            return self._step(self.svd_loss)
 
         if self.decomposition:
             if action == Actions.prune_99:
                 self.prune_model(e=0.99)
-                return self.do_step(self.svd_loss)
+                return self._step(self.svd_loss)
 
             if action == Actions.prune_9:
                 self.prune_model(e=0.9)
-                return self.do_step(self.svd_loss)
+                return self._step(self.svd_loss)
 
             if action == Actions.prune_7:
                 self.prune_model(e=0.7)
-                return self.do_step(self.svd_loss)
+                return self._step(self.svd_loss)
 
             if action == Actions.prune_5:
                 self.prune_model(e=0.5)
-                return self.do_step(self.svd_loss)
+                return self._step(self.svd_loss)
 
             if action == Actions.increase_hoer:
                 self.hoer_loss = HoyerLoss(factor=self.hoer_loss.factor*10)
-                return self.do_step(self.svd_loss)
+                return self._step(self.svd_loss)
 
             if action == Actions.decrease_hoer:
                 self.hoer_loss = HoyerLoss(factor=self.hoer_loss.factor/10)
-                return self.do_step(self.svd_loss)
+                return self._step(self.svd_loss)
 
         else:
-            print("skip")
+            if self.skip:
+                print("skip")
+            else:
+                self.epoch += 1
+                print("step lost")
             return self.state(), -0.001, False
 
-    def do_step(self, svd_loss=None) -> Tuple[torch.Tensor, float, bool]:
+    def _step(self, svd_loss=None) -> Tuple[torch.Tensor, float, bool]:
         self.epoch += 1
         train_score = self.exp.train_loop(
             dataloader=self.train_dl,
@@ -129,14 +142,19 @@ class SVDEnv:
             model_losses=svd_loss
         )
         val_scores = self.exp.val_loop(dataloader=self.val_dl)
+        done = self.epoch >= self.epochs
         p_f1 = val_scores['f1'] / self.base_f1
         p_params = self.exp.number_of_model_params() / self.base_params
-        d_f1 = p_f1 - self.last_f1
-        d_params = self.last_params - p_params
+
+        if self.running_reward:
+            d_f1 = p_f1 - self.last_f1
+            d_params = self.last_params - p_params
+            reward = float(d_f1 + 0.1 * d_params)
+        else:
+            reward = float(p_f1 + 0.1 * (1 - p_params)) if done else 0.
+
         self.last_f1 = p_f1
         self.last_params = p_params
-        reward = float(d_f1 + 0.1 * d_params)
-        done = self.epoch >= self.epochs
         return self.state(), reward, done
 
     def prune_model(self, e: float):

@@ -30,7 +30,15 @@ def create_parser():
 if __name__ == "__main__":
     args = create_parser()
     config = CONFIGS[args.config]
-    env = SVDEnv(allowed_actions=config.actions, f1_baseline=config.f1_baseline, device=args.device)
+    env = SVDEnv(
+        allowed_actions=config.actions,
+        f1_baseline=config.f1_baseline,
+        epochs=config.epochs,
+        start_epoch=config.start_epoch,
+        skip_impossible_steps=config.skip_impossible_steps,
+        running_reward=config.running_reward,
+        device=args.device
+    )
     agent = DQNAgent(
         obs_len=len(env.state()),
         n_actions=env.n_actions(),
