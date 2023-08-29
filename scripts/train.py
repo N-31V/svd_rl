@@ -64,8 +64,9 @@ if __name__ == "__main__":
             writer.add_scalar("epsilon", agent.epsilon, epochs)
             writer.add_scalar("reward/mean", mean_reward, epochs)
             writer.add_scalar("reward/running", result['reward'], epochs)
-            writer.add_scalar("metrics/size, %", result['state'][3], epochs)
-            writer.add_scalar("metrics/f1, %", result['state'][2], epochs)
+            writer.add_scalar("metrics/f1, %", result['state'][1], epochs)
+            writer.add_scalar("metrics/size, %", result['state'][2], epochs)
+
             if best_mean_reward is None or best_mean_reward < mean_reward:
                 torch.save(agent.model.state_dict(), os.path.join(path, 'model.sd.pt'))
                 best_mean_reward = mean_reward
