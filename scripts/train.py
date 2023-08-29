@@ -81,7 +81,7 @@ if __name__ == "__main__":
             agent.synchronize_target_model()
 
         optimizer.zero_grad()
-        batch = buffer.get_batch(batch_size=config.buffer_size)
+        batch = buffer.get_batch(batch_size=config.batch_size)
         loss_t = calc_loss(batch=batch, agent=agent, gamma=config.gamma)
         loss_t.backward()
         optimizer.step()
