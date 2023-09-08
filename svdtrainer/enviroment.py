@@ -1,8 +1,10 @@
 from typing import Type, Dict, Tuple, List
+import collections
 import os
 import enum
 from functools import partial
 
+import numpy as np
 import torch.nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision.models import resnet18
@@ -16,6 +18,7 @@ from fedot_ind.core.metrics.loss.svd_loss import HoyerLoss, OrthogonalLoss
 
 DATASETS_ROOT = '/media/n31v/data/datasets/'
 
+State = collections.namedtuple('State', ['f1', 'size', 'epoch', 'decomposition', 'hoer_factor'])
 
 class Actions(enum.Enum):
     train_compose = 0
@@ -28,29 +31,39 @@ class Actions(enum.Enum):
     decrease_hoer = 7
 
 
+def _compose_layer(layer: DecomposedConv2d):
+    layer.compose()
+
+
+def _decompose_layer(layer: DecomposedConv2d, decomposing_mode='spatial'):
+    layer.decompose(decomposing_mode=decomposing_mode)
+
+
+def _layer_filer(layer: torch.nn.Module):
+    return isinstance(layer, DecomposedConv2d)
+
+
 class SVDEnv:
     def __init__(
             self,
-            allowed_actions: List,
             f1_baseline: float,
             train_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
             val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor()),
             model: Type[torch.nn.Module] = resnet18,
             epochs: int = 30,
             start_epoch: int = 0,
+            train_compose: bool = True,
             skip_impossible_steps: bool = True,
-            running_reward: bool = True,
             device: str = 'cuda'
     ) -> None:
         self.base_f1 = f1_baseline
-        self.actions = allowed_actions
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
         self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
         self.model: Type[torch.nn.Module] = model
         self.epochs = epochs
         self.start_epoch: int = start_epoch
+        self.train_compose = train_compose
         self.skip = skip_impossible_steps
-        self.running_reward = running_reward
         self.device = device
 
         self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
@@ -63,15 +76,20 @@ class SVDEnv:
         self.last_f1: float = 0.
         self.last_params: float = 1
 
-    def state(self):
-        state = [self.epoch / self.epochs, self.last_f1, self.last_params]
-        if Actions.train_compose in self.actions:
-            state.append(float(self.decomposition))
-        if Actions.increase_hoer in self.actions:
-            state.append(self.hoer_loss.factor)
-        return torch.Tensor(state)
+    def get_state(self) -> State:
+        state = State(
+            f1=self.last_f1,
+            size=self.last_params,
+            epoch=self.epoch / self.epochs,
+            decomposition=float(self.decomposition),
+            hoer_factor=self.hoer_loss.factor
+        )
+        return state
 
-    def reset(self):
+    def is_done(self) -> bool:
+        return self.epoch >= self.epochs
+
+    def reset(self) -> State:
         num_classes = len(self.train_dl.dataset.class_to_idx)
         model = self.model(num_classes=num_classes)
         decompose_module(model=model, forward_mode='two_layers')
@@ -83,14 +101,12 @@ class SVDEnv:
         self.last_f1 = 0.
         self.last_params = 1
         while self.epoch < self.start_epoch:
-            self.do_step()
-        if Actions.train_compose not in self.actions:
+            self._step()
+        if not self.train_compose:
             self.decompose_model()
-        return self.state()
+        return self.get_state()
 
-    def step(self, action):
-        action = self.actions[action]
-
+    def step(self, action: Actions) -> Tuple[State, float, bool]:
         if action == Actions.train_compose:
             if self.decomposition:
                 self.compose_model()
@@ -132,9 +148,9 @@ class SVDEnv:
             else:
                 self.epoch += 1
                 print("step lost")
-            return self.state(), -0.001, False
+            return self.get_state(), 0, self.is_done()
 
-    def _step(self, svd_loss=None) -> Tuple[torch.Tensor, float, bool]:
+    def _step(self, svd_loss=None) -> Tuple[State, float, bool]:
         self.epoch += 1
         train_score = self.exp.train_loop(
             dataloader=self.train_dl,
@@ -142,38 +158,32 @@ class SVDEnv:
             model_losses=svd_loss
         )
         val_scores = self.exp.val_loop(dataloader=self.val_dl)
-        done = self.epoch >= self.epochs
         p_f1 = val_scores['f1'] / self.base_f1
         p_params = self.exp.number_of_model_params() / self.base_params
-
-        if self.running_reward:
-            d_f1 = p_f1 - self.last_f1
-            d_params = self.last_params - p_params
-            reward = float(d_f1 + 0.1 * d_params)
-        else:
-            reward = float(p_f1 + 0.1 * (1 - p_params)) if done else 0.
-
+        d_f1 = p_f1 - self.last_f1
+        d_params = self.last_params - p_params
+        reward = float(d_f1 + 0.1 * d_params)
         self.last_f1 = p_f1
         self.last_params = p_params
-        return self.state(), reward, done
+        return self.get_state(), reward, self.is_done()
 
     def prune_model(self, e: float):
         self.exp._apply_function(
             func=partial(energy_svd_pruning, energy_threshold=e),
-            condition=self.layer_filer
+            condition=_layer_filer
         )
 
     def decompose_model(self):
         self.exp._apply_function(
-            func=self.decompose_layer,
-            condition=self.layer_filer
+            func=_decompose_layer,
+            condition=_layer_filer
         )
         self.decomposition = True
 
     def compose_model(self):
         self.exp._apply_function(
-            func=self.compose_layer,
-            condition=self.layer_filer
+            func=_compose_layer,
+            condition=_layer_filer
         )
         self.decomposition = False
 
@@ -183,18 +193,3 @@ class SVDEnv:
             'hoer_loss': self.hoer_loss(model)
         }
         return losses
-
-    def n_actions(self):
-        return len(self.actions)
-
-    @staticmethod
-    def compose_layer(layer: DecomposedConv2d):
-        layer.compose()
-
-    @staticmethod
-    def decompose_layer(layer: DecomposedConv2d, decomposing_mode='spatial'):
-        layer.decompose(decomposing_mode=decomposing_mode)
-
-    @staticmethod
-    def layer_filer(layer: torch.nn.Module):
-        return isinstance(layer, DecomposedConv2d)

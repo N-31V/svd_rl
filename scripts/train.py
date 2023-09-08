@@ -8,16 +8,16 @@ from datetime import datetime
 from sklearn.exceptions import UndefinedMetricWarning
 from torch.utils.tensorboard import SummaryWriter
 
-from svdtrainer.enviroment import SVDEnv
+from svdtrainer.enviroment import SVDEnv, Actions
 from svdtrainer.agent import DQNAgent
-from svdtrainer.experience import ExperienceBuffer, ExperienceSource
+from svdtrainer.experience import ExperienceBuffer, ExperienceSource, CSVExperienceSource
 from svdtrainer.utils import calc_loss, save_config
 from configs import CONFIGS
 
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 ROOT = '/media/n31v/data/results/SVDRL'
-CONFIG = 'simple_dec'
+CONFIG = 'simple_pruning'
 
 
 def create_parser():
@@ -31,24 +31,31 @@ if __name__ == "__main__":
     args = create_parser()
     config = CONFIGS[args.config]
     env = SVDEnv(
-        allowed_actions=config.actions,
         f1_baseline=config.f1_baseline,
         epochs=config.epochs,
         start_epoch=config.start_epoch,
         skip_impossible_steps=config.skip_impossible_steps,
-        running_reward=config.running_reward,
-        device=args.device
+        device=args.device,
+        train_compose=(Actions.train_compose in config.actions)
     )
     agent = DQNAgent(
-        obs_len=len(env.state()),
-        n_actions=env.n_actions(),
+        obs_len=len(config.state),
+        n_actions=len(config.actions),
         device=args.device,
         epsilon_start=config.epsilon_start,
         epsilon_final=config.epsilon_final,
         epsilon_step=config.epsilon_step
     )
     buffer = ExperienceBuffer(capacity=config.buffer_size)
-    source = ExperienceSource(env=env, agent=agent, buffer=buffer)
+    source = CSVExperienceSource(
+        env=env,
+        actions=config.actions,
+        agent=agent,
+        buffer=buffer,
+        state=config.state,
+        running_reward=config.running_reward,
+        csv_file='experience.csv'
+    )
 
     current_time = datetime.now().strftime("%b%d_%H-%M-%S")
     path = os.path.join(ROOT, args.config, current_time)
@@ -57,7 +64,7 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.Adam(agent.model.parameters(), lr=config.lr)
     total_rewards = []
-    best_mean_reward = None
+    best_mean_reward = 0
     epochs = 0
     while True:
         epochs += 1
@@ -72,10 +79,10 @@ if __name__ == "__main__":
             writer.add_scalar("epsilon", agent.epsilon, epochs)
             writer.add_scalar("reward/mean", mean_reward, epochs)
             writer.add_scalar("reward/running", result['reward'], epochs)
-            writer.add_scalar("metrics/f1, %", result['state'][1], epochs)
-            writer.add_scalar("metrics/size, %", result['state'][2], epochs)
+            writer.add_scalar("metrics/f1, %", result['state'].f1, epochs)
+            writer.add_scalar("metrics/size, %", result['state'].size, epochs)
 
-            if best_mean_reward is None or best_mean_reward < mean_reward:
+            if best_mean_reward < mean_reward:
                 torch.save(agent.model.state_dict(), os.path.join(path, 'model.sd.pt'))
                 best_mean_reward = mean_reward
             if mean_reward > config.mean_reward_bound:
