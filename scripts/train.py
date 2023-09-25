@@ -32,6 +32,7 @@ if __name__ == "__main__":
     config = CONFIGS[args.config]
     env = SVDEnv(
         f1_baseline=config.f1_baseline,
+        decomposing_mode=config.decomposing_mode,
         epochs=config.epochs,
         start_epoch=config.start_epoch,
         skip_impossible_steps=config.skip_impossible_steps,
