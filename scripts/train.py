@@ -58,7 +58,7 @@ if __name__ == "__main__":
         csv_file='experience.csv'
     )
 
-    current_time = datetime.now().strftime("%b%d_%H-%M-%S")
+    current_time = datetime.now().strftime("%b%d_%H-%M")
     path = os.path.join(ROOT, args.config, current_time)
     writer = SummaryWriter(log_dir=path)
     save_config(config=config, path=path)

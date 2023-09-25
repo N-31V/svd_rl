@@ -13,7 +13,7 @@ from configs import CONFIGS
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 CONFIG = 'simple_dec'
-DATE = 'Aug29_08-05-22'
+DATE = 'Aug29_08-05'
 ROOT = os.path.join('/media/n31v/data/results/SVDRL', CONFIG, DATE)
 DEVICE = 'cuda'
 
@@ -26,7 +26,7 @@ def filter_state(state, config) -> torch.Tensor:
 
 if __name__ == "__main__":
     config = CONFIGS[CONFIG]
-    current_time = datetime.now().strftime("%b%d_%H-%M-%S")
+    current_time = datetime.now().strftime("%b%d_%H-%M")
     path = os.path.join(ROOT, f'test_{current_time}')
     env = SVDEnv(
         f1_baseline=config.f1_baseline,
