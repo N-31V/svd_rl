@@ -13,6 +13,7 @@ Config = collections.namedtuple(
         'actions',
         'state',
         'f1_baseline',
+        'decomposing_mode',
         'epochs',
         'start_epoch',
         'skip_impossible_steps',
@@ -30,6 +31,7 @@ Config = collections.namedtuple(
     ],
     defaults=[
         0.776,
+        'spatial',
         30,
         0,
         False,
