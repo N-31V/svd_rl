@@ -109,40 +109,31 @@ class CSVExperienceSource(ExperienceSource):
         for i in range(self.csv_len):
             series = tmp_df.iloc[i]
             if series['action'] in action_indices:
+                state = State(
+                    f1=series['f1'],
+                    size=series['size'],
+                    epoch=series['epoch'],
+                    decomposition=series['dec'],
+                    hoer_factor=series['hoer']
+                )
+                n_state = State(
+                    f1=series['n_f1'],
+                    size=series['n_size'],
+                    epoch=series['n_epoch'],
+                    decomposition=series['n_dec'],
+                    hoer_factor=series['n_hoer']
+                )
+
                 if self.running_reward:
                     reward = series['reward']
                 else:
-                    reward = self.final_reward(
-                        state=State(
-                            f1=series['n_f1'],
-                            size=series['n_size'],
-                            epoch=series['n_epoch'],
-                            decomposition=series['n_dec'],
-                            hoer_factor=series['n_hoer']
-                        )
-                    ) if series['done'] else 0
+                    reward = self.final_reward(state) if series['done'] else 0
                 experience = Experience(
-                    state=self.filter_state(
-                        state=State(
-                            f1=series['f1'],
-                            size=series['size'],
-                            epoch=series['epoch'],
-                            decomposition=series['dec'],
-                            hoer_factor=series['hoer']
-                        )
-                    ),
+                    state=self.filter_state(state),
                     action=self.actions.index(Actions(series['action'])),
                     reward=reward,
                     done=series['done'],
-                    next_state=self.filter_state(
-                        state=State(
-                            f1=series['n_f1'],
-                            size=series['n_size'],
-                            epoch=series['n_epoch'],
-                            decomposition=series['n_dec'],
-                            hoer_factor=series['n_hoer']
-                        )
-                    ),
+                    next_state=self.filter_state(n_state),
                 )
                 self.buffer.append(experience)
         print(f'Successfully read {len(self.buffer)} records.')

@@ -4,7 +4,6 @@ import os
 import enum
 from functools import partial
 
-import numpy as np
 import torch.nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision.models import resnet18
@@ -50,6 +49,7 @@ class SVDEnv:
             train_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
             val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor()),
             model: Type[torch.nn.Module] = resnet18,
+            decomposing_mode: str = 'spatial',
             epochs: int = 30,
             start_epoch: int = 0,
             train_compose: bool = True,
@@ -60,6 +60,7 @@ class SVDEnv:
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
         self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
         self.model: Type[torch.nn.Module] = model
+        self.decomposing_mode = decomposing_mode
         self.epochs = epochs
         self.start_epoch: int = start_epoch
         self.train_compose = train_compose
@@ -175,7 +176,7 @@ class SVDEnv:
 
     def decompose_model(self):
         self.exp._apply_function(
-            func=_decompose_layer,
+            func=partial(_decompose_layer, decomposing_mode=self.decomposing_mode),
             condition=_layer_filer
         )
         self.decomposition = True
