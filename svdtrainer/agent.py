@@ -1,5 +1,5 @@
 """This module contains agent classes."""
-from typing import Optional, List, Tuple
+from typing import Optional, List, Dict
 from abc import ABC, abstractmethod
 import random
 import copy
@@ -65,6 +65,7 @@ class DQNAgent(Agent):
             device=device
         )
         self.target_model = copy.deepcopy(self.model)
+        self.target_model.eval()
         self.epsilon = epsilon_start
         self.epsilon_final = epsilon_final
         self.epsilon_step = epsilon_step
@@ -103,9 +104,11 @@ class DQNAgent(Agent):
         Returns:
             Action.
         """
+        self.model.eval()
         state = self.filter_state(state)
         state = state.to(self.device)
-        logits = self.model(torch.unsqueeze(state, dim=0))[0].detach().cpu()
+        with torch.no_grad():
+            logits = self.model(torch.unsqueeze(state, dim=0))[0].cpu()
         return self.actions[torch.argmax(logits, dim=0).item()]
 
     def decrease_epsilon(self):
@@ -133,3 +136,18 @@ class DQNAgent(Agent):
     def action_index(self, action: Actions):
         """Returns action index."""
         return self.actions.index(action)
+
+    def do_checkpoint(self) -> Dict:
+        checkpoint = {
+            'model': self.model.state_dict(),
+            'target_model': self.target_model.state_dict(),
+            'epsilon': self.epsilon,
+        }
+        return checkpoint
+
+    def load_checkpoint(self, checkpoint: Dict) -> None:
+        self.model.load_state_dict(checkpoint['model'])
+        self.model.to(self.device)
+        self.target_model.load_state_dict(checkpoint['target_model'])
+        self.target_model.to(self.device)
+        self.epsilon = checkpoint['epsilon']

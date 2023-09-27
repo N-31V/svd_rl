@@ -18,6 +18,7 @@ DATASETS_ROOT = '/media/n31v/data/datasets/'
 @dataclass(frozen=True)
 class Config:
     """The data class containing the training parameters."""
+    name: str
     actions: List[Actions]
     state_mask: List[str]
     f1_baseline: float = 0.776
@@ -67,10 +68,10 @@ def calc_loss(batch: Tuple, agent: DQNAgent, gamma=0.99) -> torch.Tensor:
     """
     states, actions, rewards, dones, next_states = (x.to(agent.device) for x in batch)
 
+    agent.model.train()
     state_action_values = agent.model(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
-    next_state_values = agent.target_model(next_states).max(1)[0]
+    with torch.no_grad():
+        next_state_values = agent.target_model(next_states).max(1)[0]
     next_state_values[dones] = 0.0
-    next_state_values = next_state_values.detach()
-
     expected_state_action_values = next_state_values * gamma + rewards
     return torch.nn.MSELoss()(state_action_values, expected_state_action_values)
