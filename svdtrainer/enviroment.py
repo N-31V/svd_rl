@@ -1,23 +1,18 @@
-from typing import Type, Dict, Tuple, List
+from typing import Type, Dict, Tuple
 import collections
-import os
 import enum
 from functools import partial
 
 import torch.nn
 from torch.utils.data import Dataset, DataLoader
-from torchvision.models import resnet18
-from torchvision.datasets import CIFAR10
-from torchvision.transforms import ToTensor
 from fedot_ind.core.architecture.experiment.nn_experimenter import ClassificationExperimenter
 from fedot_ind.core.operation.optimization.svd_tools import decompose_module, energy_svd_pruning
 from fedot_ind.core.operation.decomposition.decomposed_conv import DecomposedConv2d
 from fedot_ind.core.metrics.loss.svd_loss import HoyerLoss, OrthogonalLoss
 
 
-DATASETS_ROOT = '/media/n31v/data/datasets/'
-
 State = collections.namedtuple('State', ['f1', 'size', 'epoch', 'decomposition', 'hoer_factor'])
+
 
 class Actions(enum.Enum):
     train_compose = 0
@@ -46,14 +41,15 @@ class SVDEnv:
     def __init__(
             self,
             f1_baseline: float,
-            train_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor()),
-            val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor()),
-            model: Type[torch.nn.Module] = resnet18,
-            decomposing_mode: str = 'spatial',
-            epochs: int = 30,
-            start_epoch: int = 0,
-            train_compose: bool = True,
-            skip_impossible_steps: bool = True,
+            train_ds: Dataset,
+            val_ds: Dataset,
+            model: Type[torch.nn.Module],
+            decomposing_mode: str,
+            epochs: int,
+            start_epoch: int,
+            train_compose: bool,
+            skip_impossible_steps: bool,
+            size_factor: float,
             device: str = 'cuda'
     ) -> None:
         self.base_f1 = f1_baseline
@@ -65,6 +61,7 @@ class SVDEnv:
         self.start_epoch: int = start_epoch
         self.train_compose = train_compose
         self.skip = skip_impossible_steps
+        self.size_factor = size_factor
         self.device = device
 
         self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
@@ -163,7 +160,7 @@ class SVDEnv:
         p_params = self.exp.number_of_model_params() / self.base_params
         d_f1 = p_f1 - self.last_f1
         d_params = self.last_params - p_params
-        reward = float(d_f1 + 0.1 * d_params)
+        reward = float(d_f1 + self.size_factor * d_params)
         self.last_f1 = p_f1
         self.last_params = p_params
         return self.get_state(), reward, self.is_done()

@@ -1,10 +1,12 @@
 """This module contains agent classes."""
-from typing import Optional
+from typing import Optional, List, Tuple
 from abc import ABC, abstractmethod
+import random
 import copy
 import torch
 
 from svdtrainer.models import SimpleFFDQN
+from svdtrainer.enviroment import Actions, State
 
 
 class Agent(ABC):
@@ -36,8 +38,8 @@ class Agent(ABC):
 class DQNAgent(Agent):
     """DQN agent class.
     Args:
-        obs_len: Environment state vector size.
-        n_actions: Number of possible actions in the environment.
+        state_mask: List of observed state variables.
+        actions: List of possible actions in the environment.
         device: String passed to ``torch.device`` initialization.
         weight: Path to the model state_dict to load weights.
         epsilon_start: Epsilon start value.
@@ -46,63 +48,65 @@ class DQNAgent(Agent):
     """
     def __init__(
             self,
-            obs_len: int,
-            n_actions: int,
-            device: str = 'cuda',
+            state_mask: List[str],
+            actions: List[Actions],
+            epsilon_start: float,
+            epsilon_final: float,
+            epsilon_step: float,
             weight: Optional[str] = None,
-            epsilon_start: float = 1.,
-            epsilon_final: float = 0.01,
-            epsilon_step: float = 10**-5,
+            device: str = 'cuda',
     ):
-        print(f'Configurate FFDQN model: {obs_len=}, {n_actions=}.')
+        self.actions = actions
+        self.state_mask = state_mask
+        print(f'Configurate FFDQN model: {state_mask=}, {actions=}.')
         super().__init__(
-            model=SimpleFFDQN(obs_len, n_actions),
+            model=SimpleFFDQN(len(state_mask), len(actions)),
             weight=weight,
             device=device
         )
-        self.n_actions = n_actions
         self.target_model = copy.deepcopy(self.model)
         self.epsilon = epsilon_start
         self.epsilon_final = epsilon_final
         self.epsilon_step = epsilon_step
 
-    def __call__(self, state: torch.Tensor) -> int:
+    def __call__(self, state: State) -> Actions:
         """Returns the agent's action at the current state.
 
         Args:
             state: The current state of the environment.
 
         Returns:
-            Integer encoded action.
+            Action.
         """
         return self.epsilon_strategy(self.best_action(state))
 
-    def epsilon_strategy(self, action: int) -> int:
+    def epsilon_strategy(self, action: Actions) -> Actions:
         """Applies the epsilon strategy to the agent's action
 
         Args:
-            action: Integer encoded action.
+            action: Action.
 
         Returns:
-            Integer encoded action.
+            Action.
         """
         if torch.rand(1) < self.epsilon:
-            return torch.randint(0, self.n_actions, (1,)).item()
+            return random.choice(self.actions)
         else:
             return action
 
-    def best_action(self, state: torch.Tensor) -> int:
+    def best_action(self, state: State) -> Actions:
         """Calculates the best action in the current state.
 
         Args:
             state: The current state of the environment.
 
         Returns:
-            Integer encoded action.
+            Action.
         """
+        state = self.filter_state(state)
         state = state.to(self.device)
         logits = self.model(torch.unsqueeze(state, dim=0))[0].detach().cpu()
-        return torch.argmax(logits, dim=0).item()
+        return self.actions[torch.argmax(logits, dim=0).item()]
 
     def decrease_epsilon(self):
         """Decreases the epsilon value by one epsilon_step"""
@@ -112,3 +116,20 @@ class DQNAgent(Agent):
         """Copies the weights of the trained model to the target model."""
         self.target_model.load_state_dict(self.model.state_dict())
         print('Models synchronized')
+
+    def filter_state(self, state: State) -> torch.Tensor:
+        """Filters the state and converts it to a tensor.
+
+        Args:
+            state: The current state of the environment.
+
+        Returns:
+            Filtered state as ``torch.Tensor``
+        """
+        state = state._asdict()
+        state = [state[s] for s in self.state_mask]
+        return torch.tensor(state, dtype=torch.float32)
+
+    def action_index(self, action: Actions):
+        """Returns action index."""
+        return self.actions.index(action)
