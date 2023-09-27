@@ -31,45 +31,52 @@ class ExperienceSource:
     def __init__(
             self,
             env: SVDEnv,
-            actions: List[Actions],
             agent: DQNAgent,
             buffer: ExperienceBuffer,
-            state: List[str],
             running_reward: bool,
     ):
         self.env = env
-        self.actions = actions
         self.agent = agent
         self.buffer = buffer
-        self.state_mask = state
         self.running_reward = running_reward
 
         self.state = self.env.reset()
         self.total_reward = 0
 
-    def filter_state(self, state: State) -> torch.Tensor:
-        state = state._asdict()
-        state = [state[s] for s in self.state_mask]
-        return torch.tensor(state, dtype=torch.float32)
-
     def final_reward(self, state: State) -> float:
-        return state.f1 + 0.1 * (1 - state.size)
+        return state.f1 + self.env.size_factor * (1 - state.size)
+
+    def experience(
+            self,
+            state: State,
+            action: Actions,
+            reward: float,
+            done: bool,
+            next_state: State
+    ) -> Experience:
+        if not self.running_reward:
+            reward = self.final_reward(next_state) if done else 0
+        experience = Experience(
+            state=self.agent.filter_state(state),
+            action=self.agent.action_index(action),
+            reward=reward,
+            done=done,
+            next_state=self.agent.filter_state(next_state)
+        )
+        self.buffer.append(experience)
+        return experience
 
     def generate(self):
         result = None
-        action = self.agent(self.filter_state(self.state))
-        state, reward, done = self.env.step(self.actions[action])
-        reward = reward if self.running_reward else 0
-        self.total_reward += reward
-        exp = Experience(self.filter_state(self.state), action, reward, done, self.filter_state(state))
-        self.buffer.append(exp)
-        self.state = state
+        action = self.agent(self.state)
+        print(action.name)
+        next_state, reward, done = self.env.step(action)
+        experience = self.experience(self.state, action, reward, done, next_state)
+        self.total_reward += experience.reward
+        self.state = next_state
 
         if done:
-            result = {
-                'reward': self.total_reward if self.running_reward else self.final_reward(state),
-                'state': self.state
-            }
+            result = {'reward': self.total_reward, 'state': self.state}
             self.state = self.env.reset()
             self.total_reward = 0
         return result
@@ -79,19 +86,15 @@ class CSVExperienceSource(ExperienceSource):
     def __init__(
             self,
             env: SVDEnv,
-            actions: List[Actions],
             agent: DQNAgent,
             buffer: ExperienceBuffer,
-            state: List[str],
             running_reward: bool,
             csv_file: str,
     ):
         super().__init__(
             env=env,
-            actions=actions,
             agent=agent,
             buffer=buffer,
-            state=state,
             running_reward=running_reward,
         )
         self.csv_file = csv_file
@@ -103,7 +106,7 @@ class CSVExperienceSource(ExperienceSource):
 
 
     def read_csv(self):
-        action_indices = [a.value for a in self.actions]
+        action_indices = [a.value for a in self.agent.actions]
         tmp_df = pd.read_csv(self.csv_file)
         self.csv_len = len(tmp_df)
         for i in range(self.csv_len):
@@ -116,58 +119,45 @@ class CSVExperienceSource(ExperienceSource):
                     decomposition=series['dec'],
                     hoer_factor=series['hoer']
                 )
-                n_state = State(
+                next_state = State(
                     f1=series['n_f1'],
                     size=series['n_size'],
                     epoch=series['n_epoch'],
                     decomposition=series['n_dec'],
                     hoer_factor=series['n_hoer']
                 )
-
-                if self.running_reward:
-                    reward = series['reward']
-                else:
-                    reward = self.final_reward(state) if series['done'] else 0
-                experience = Experience(
-                    state=self.filter_state(state),
-                    action=self.actions.index(Actions(series['action'])),
-                    reward=reward,
+                _ = self.experience(
+                    state=state,
+                    action=Actions(series['action']),
+                    reward=series['reward'],
                     done=series['done'],
-                    next_state=self.filter_state(n_state),
+                    next_state=next_state,
+                    write=False
                 )
-                self.buffer.append(experience)
         print(f'Successfully read {len(self.buffer)} records.')
 
     def create_csv(self):
-        # os.makedirs(os.path.dirname(self.csv_file), exist_ok=True)
         tmp_df = pd.DataFrame(
             columns=['f1', 'size', 'epoch', 'dec', 'hoer', 'action', 'reward', 'done', 'n_f1', 'n_size', 'n_epoch', 'n_dec', 'n_hoer']
         )
         tmp_df.to_csv(self.csv_file)
         print('CSV file created successfully.')
 
-    def generate(self):
-        result = None
-        action = self.agent(self.filter_state(self.state))
-        print(self.actions[action].name)
-        state, reward, done = self.env.step(self.actions[action])
-        self.add_experience(self.state, self.actions[action], reward, done, state)
-        reward = reward if self.running_reward else 0
-        self.total_reward += reward
-        exp = Experience(self.filter_state(self.state), action, reward, done, self.filter_state(state))
-        self.buffer.append(exp)
-        self.state = state
+    def experience(
+            self,
+            state: State,
+            action: Actions,
+            reward: float,
+            done: bool,
+            next_state: State,
+            write: bool = True
+    ) -> Experience:
+        if write:
+            self.write_experience(state, action, reward, done, next_state)
+        experience = super().experience(state, action, reward, done, next_state)
+        return experience
 
-        if done:
-            result = {
-                'reward': self.total_reward if self.running_reward else state.f1 + 0.1 * (1 - state.size),
-                'state': self.state
-            }
-            self.state = self.env.reset()
-            self.total_reward = 0
-        return result
-
-    def add_experience(
+    def write_experience(
             self,
             state: State,
             action: Actions,

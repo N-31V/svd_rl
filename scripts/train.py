@@ -10,14 +10,14 @@ from torch.utils.tensorboard import SummaryWriter
 
 from svdtrainer.enviroment import SVDEnv, Actions
 from svdtrainer.agent import DQNAgent
-from svdtrainer.experience import ExperienceBuffer, ExperienceSource, CSVExperienceSource
+from svdtrainer.experience import ExperienceBuffer, CSVExperienceSource
 from svdtrainer.utils import calc_loss, save_config
 from configs import CONFIGS
 
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 ROOT = '/media/n31v/data/results/SVDRL'
-CONFIG = 'simple_pruning'
+CONFIG = 'simple_pruning_epoch'
 
 
 def create_parser():
@@ -32,28 +32,30 @@ if __name__ == "__main__":
     config = CONFIGS[args.config]
     env = SVDEnv(
         f1_baseline=config.f1_baseline,
+        train_ds=config.train_ds,
+        val_ds=config.val_ds,
+        model=config.model,
         decomposing_mode=config.decomposing_mode,
         epochs=config.epochs,
         start_epoch=config.start_epoch,
         skip_impossible_steps=config.skip_impossible_steps,
+        size_factor=config.size_factor,
         device=args.device,
         train_compose=(Actions.train_compose in config.actions)
     )
     agent = DQNAgent(
-        obs_len=len(config.state),
-        n_actions=len(config.actions),
+        state_mask=config.state_mask,
+        actions=config.actions,
         device=args.device,
         epsilon_start=config.epsilon_start,
         epsilon_final=config.epsilon_final,
-        epsilon_step=config.epsilon_step
+        epsilon_step=config.epsilon_step,
     )
     buffer = ExperienceBuffer(capacity=config.buffer_size)
     source = CSVExperienceSource(
         env=env,
-        actions=config.actions,
         agent=agent,
         buffer=buffer,
-        state=config.state,
         running_reward=config.running_reward,
         csv_file='experience.csv'
     )
