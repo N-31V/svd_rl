@@ -16,6 +16,7 @@ CONFIGS = {
         actions=[Actions.train_decompose, Actions.prune_9],
         state_mask=['f1', 'size', 'epoch'],
         start_epoch=10,
+        epsilon_step=10**-3
     ),
     'simple_dec': Config(
         actions=[Actions.train_compose, Actions.train_decompose, Actions.prune_9],

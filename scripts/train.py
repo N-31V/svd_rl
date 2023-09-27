@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
         if result is not None:
             total_rewards.append(result['reward'])
-            mean_reward = np.mean(total_rewards[-10:])
+            mean_reward = np.mean(total_rewards[-20:])
             print(f"{epochs}: done {len(total_rewards)} trainings, mean reward {mean_reward:.3f}")
             writer.add_scalar("epsilon", agent.epsilon, epochs)
             writer.add_scalar("reward/mean", mean_reward, epochs)
@@ -85,9 +85,11 @@ if __name__ == "__main__":
             writer.add_scalar("metrics/f1, %", result['state'].f1, epochs)
             writer.add_scalar("metrics/size, %", result['state'].size, epochs)
 
-            if best_mean_reward < mean_reward:
-                torch.save(agent.model.state_dict(), os.path.join(path, 'model.sd.pt'))
+            if mean_reward > best_mean_reward and epochs > 1000:
+                print(f'Best reward: {mean_reward}, saving model...')
+                torch.save(agent.model.state_dict(), os.path.join(path, f'model{epochs}.sd.pt'))
                 best_mean_reward = mean_reward
+
             if mean_reward > config.mean_reward_bound:
                 print(f"Solved in {epochs} epochs!")
                 break
