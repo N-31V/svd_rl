@@ -1,6 +1,7 @@
 from typing import List
 import os
 import collections
+import logging
 import numpy as np
 import pandas as pd
 import torch
@@ -35,6 +36,7 @@ class ExperienceSource:
             buffer: ExperienceBuffer,
             running_reward: bool,
     ):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.env = env
         self.agent = agent
         self.buffer = buffer
@@ -69,11 +71,11 @@ class ExperienceSource:
     def generate(self):
         result = None
         action = self.agent(self.state)
-        print(action.name)
         next_state, reward, done = self.env.step(action)
         experience = self.experience(self.state, action, reward, done, next_state)
         self.total_reward += experience.reward
         self.state = next_state
+        self.logger.info(f'New state: {next_state}, total reward: {self.total_reward}')
 
         if done:
             result = {'reward': self.total_reward, 'state': self.state}
@@ -134,14 +136,14 @@ class CSVExperienceSource(ExperienceSource):
                     next_state=next_state,
                     write=False
                 )
-        print(f'Successfully read {len(self.buffer)} records.')
+        self.logger.info(f'Successfully read {len(self.buffer)} records.')
 
     def create_csv(self):
         tmp_df = pd.DataFrame(
             columns=['f1', 'size', 'epoch', 'dec', 'hoer', 'action', 'reward', 'done', 'n_f1', 'n_size', 'n_epoch', 'n_dec', 'n_hoer']
         )
         tmp_df.to_csv(self.csv_file)
-        print('CSV file created successfully.')
+        self.logger.info('CSV file created successfully.')
 
     def experience(
             self,

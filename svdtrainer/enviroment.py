@@ -2,6 +2,7 @@ from typing import Type, Dict, Tuple
 import collections
 import enum
 from functools import partial
+import logging
 
 import torch.nn
 from torch.utils.data import Dataset, DataLoader
@@ -52,6 +53,7 @@ class SVDEnv:
             size_factor: float,
             device: str = 'cuda'
     ) -> None:
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.base_f1 = f1_baseline
         self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
         self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
@@ -73,6 +75,7 @@ class SVDEnv:
         self.base_params: int = 0
         self.last_f1: float = 0.
         self.last_params: float = 1
+        self.logger.info('Environment configured.')
 
     def get_state(self) -> State:
         state = State(
@@ -88,6 +91,7 @@ class SVDEnv:
         return self.epoch >= self.epochs
 
     def reset(self) -> State:
+        self.logger.info('Resetting environment...')
         num_classes = len(self.train_dl.dataset.class_to_idx)
         model = self.model(num_classes=num_classes)
         decompose_module(model=model, forward_mode='two_layers')
@@ -142,10 +146,10 @@ class SVDEnv:
 
         else:
             if self.skip:
-                print("skip")
+                self.logger.info('Impossible action, skipping a step.')
             else:
                 self.epoch += 1
-                print("step lost")
+                self.logger.info('Impossible action, step lost.')
             return self.get_state(), 0, self.is_done()
 
     def _step(self, svd_loss=None) -> Tuple[State, float, bool]:

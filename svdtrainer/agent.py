@@ -3,6 +3,7 @@ from typing import Optional, List, Dict
 from abc import ABC, abstractmethod
 import random
 import copy
+import logging
 import torch
 
 from svdtrainer.models import SimpleFFDQN
@@ -23,6 +24,7 @@ class Agent(ABC):
             weight: Optional[str] = None,
             device: str = 'cuda',
     ):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.device = torch.device(device)
         self.model = model
         if weight is not None:
@@ -58,7 +60,6 @@ class DQNAgent(Agent):
     ):
         self.actions = actions
         self.state_mask = state_mask
-        print(f'Configurate FFDQN model: {state_mask=}, {actions=}.')
         super().__init__(
             model=SimpleFFDQN(len(state_mask), len(actions)),
             weight=weight,
@@ -69,6 +70,7 @@ class DQNAgent(Agent):
         self.epsilon = epsilon_start
         self.epsilon_final = epsilon_final
         self.epsilon_step = epsilon_step
+        self.logger.info(f'Configurate FFDQN model: {state_mask=}, {actions=}.')
 
     def __call__(self, state: State) -> Actions:
         """Returns the agent's action at the current state.
@@ -91,7 +93,9 @@ class DQNAgent(Agent):
             Action.
         """
         if torch.rand(1) < self.epsilon:
-            return random.choice(self.actions)
+            action = random.choice(self.actions)
+            self.logger.info(f'Random! Action: {action}')
+            return action
         else:
             return action
 
@@ -109,7 +113,9 @@ class DQNAgent(Agent):
         state = state.to(self.device)
         with torch.no_grad():
             logits = self.model(torch.unsqueeze(state, dim=0))[0].cpu()
-        return self.actions[torch.argmax(logits, dim=0).item()]
+        action = self.actions[torch.argmax(logits, dim=0).item()]
+        self.logger.info(f'Best action: {action}')
+        return action
 
     def decrease_epsilon(self):
         """Decreases the epsilon value by one epsilon_step"""
@@ -118,7 +124,7 @@ class DQNAgent(Agent):
     def synchronize_target_model(self):
         """Copies the weights of the trained model to the target model."""
         self.target_model.load_state_dict(self.model.state_dict())
-        print('Models synchronized')
+        self.logger.info('Models synchronized')
 
     def filter_state(self, state: State) -> torch.Tensor:
         """Filters the state and converts it to a tensor.
@@ -143,6 +149,7 @@ class DQNAgent(Agent):
             'target_model': self.target_model.state_dict(),
             'epsilon': self.epsilon,
         }
+        self.logger.info('Checkpoint created.')
         return checkpoint
 
     def load_checkpoint(self, checkpoint: Dict) -> None:
@@ -151,3 +158,4 @@ class DQNAgent(Agent):
         self.target_model.load_state_dict(checkpoint['target_model'])
         self.target_model.to(self.device)
         self.epsilon = checkpoint['epsilon']
+        self.logger.info('Checkpoint loaded.')
