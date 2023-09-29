@@ -8,7 +8,7 @@ from configs import CONFIGS
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 CONFIG = 'simple_pruning_epoch'
-CHECKPOINT = '/media/n31v/data/results/SVDRL/simple_pruning_epoch/Sep27_19-12/checkpoint.pickle'
+CHECKPOINT = None
 
 
 def create_parser():

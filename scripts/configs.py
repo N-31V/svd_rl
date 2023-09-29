@@ -25,6 +25,5 @@ CONFIGS = {
         name='simple_dec',
         actions=[Actions.train_compose, Actions.train_decompose, Actions.prune_9],
         state_mask=['decomposition', 'epoch', 'f1', 'size'],
-        start_epoch=10,
     )
 }
