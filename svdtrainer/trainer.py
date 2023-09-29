@@ -22,6 +22,7 @@ class Trainer:
     def __init__(self, config: Config, device: str = 'cuda', checkpoint_path: Optional[str] = None):
         current_time = datetime.now().strftime("%b%d_%H-%M")
         self.path = os.path.join(ROOT, config.name, current_time)
+        self.writer = SummaryWriter(log_dir=self.path)
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s: %(name)s - %(message)s',
@@ -33,7 +34,6 @@ class Trainer:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.config = config
         save_config(config=config, path=self.path)
-        self.writer = SummaryWriter(log_dir=self.path)
 
         self.env = SVDEnv(
             f1_baseline=config.f1_baseline,
