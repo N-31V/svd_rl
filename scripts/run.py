@@ -1,9 +1,9 @@
 """Agent-driven model training module."""
 import os
 import warnings
+import logging
 from datetime import datetime
 from sklearn.exceptions import UndefinedMetricWarning
-import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from svdtrainer.enviroment import SVDEnv, Actions
@@ -12,58 +12,65 @@ from configs import CONFIGS
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
-CONFIG = 'simple_dec'
-DATE = 'Aug29_08-05'
+CONFIG = 'simple_pruning_epoch'
+DATE = 'Sep29_17-04'
 ROOT = os.path.join('/media/n31v/data/results/SVDRL', CONFIG, DATE)
 DEVICE = 'cuda'
-
-
-def filter_state(state, config) -> torch.Tensor:
-    state = state._asdict()
-    state = [state[s] for s in config.state]
-    return torch.tensor(state, dtype=torch.float32)
+MODEL = 'model8759.sd.pt'
 
 
 if __name__ == "__main__":
     config = CONFIGS[CONFIG]
     current_time = datetime.now().strftime("%b%d_%H-%M")
     path = os.path.join(ROOT, f'test_{current_time}')
+    writer = SummaryWriter(log_dir=path)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s: %(name)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(path, 'log.log')),
+            logging.StreamHandler()
+        ]
+    )
     env = SVDEnv(
         f1_baseline=config.f1_baseline,
+        train_ds=config.train_ds,
+        val_ds=config.val_ds,
+        model=config.model,
         decomposing_mode=config.decomposing_mode,
         epochs=config.epochs,
         start_epoch=config.start_epoch,
         skip_impossible_steps=config.skip_impossible_steps,
+        size_factor=config.size_factor,
         device=DEVICE,
         train_compose=(Actions.train_compose in config.actions)
     )
     agent = DQNAgent(
-        obs_len=len(config.state),
-        n_actions=len(config.actions),
+        state_mask=config.state_mask,
+        actions=config.actions,
         device=DEVICE,
-        weight=os.path.join(ROOT, 'model.sd.pt')
+        epsilon_start=config.epsilon_start,
+        epsilon_final=config.epsilon_final,
+        epsilon_step=config.epsilon_step,
+        weight=os.path.join(ROOT, MODEL)
     )
-    writer = SummaryWriter(log_dir=path)
-
     total_reward = 0
     epoch = 0
     done = False
-    state = filter_state(env.reset(), config)
+    state = env.reset()
 
     while not done:
         epoch += 1
         action = agent.best_action(state)
-        action = config.actions[action]
         print(f'{epoch}: {action}')
-        raw_state, reward, done = env.step(action)
-        state = filter_state(raw_state, config)
-        total_reward = raw_state.f1 + 0.1 * (1 - raw_state.size)
+        state, reward, done = env.step(action)
+        total_reward = state.f1 + config.size_factor * (1 - state.size)
         writer.add_scalar("test/total_reward", total_reward, epoch)
         writer.add_scalar("test/running_reward", reward, epoch)
-        writer.add_scalar("test/decomposition", raw_state.decomposition, epoch)
-        writer.add_scalar("test/epoch, %", raw_state.epoch, epoch)
-        writer.add_scalar("test/f1, %", raw_state.f1, epoch)
-        writer.add_scalar("test/size, %", raw_state.size, epoch)
-        writer.add_scalar("test/hoer_factor", raw_state.hoer_factor, epoch)
+        writer.add_scalar("test/decomposition", state.decomposition, epoch)
+        writer.add_scalar("test/epoch, %", state.epoch, epoch)
+        writer.add_scalar("test/f1, %", state.f1, epoch)
+        writer.add_scalar("test/size, %", state.size, epoch)
+        writer.add_scalar("test/hoer_factor", state.hoer_factor, epoch)
         writer.add_scalar("test/action", action.value, epoch)
     env.exp.save_model(os.path.join(path, 'trained_model'))
