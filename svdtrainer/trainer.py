@@ -74,47 +74,43 @@ class Trainer:
             self.load_checkpoint(checkpoint_path=checkpoint_path)
 
     def train(self):
-        try:
-            while True:
-                self.epochs += 1
-                self.logger.info(f"epoch {self.epochs}")
-                self.agent.decrease_epsilon()
-                result = self.source.generate()
+        while True:
+            self.epochs += 1
+            self.logger.info(f"epoch {self.epochs}")
+            self.agent.decrease_epsilon()
+            result = self.source.generate()
 
-                if result is not None:
-                    self.total_rewards.append(result['reward'])
-                    mean_reward = np.mean(self.total_rewards[-20:])
-                    self.logger.info(f"Done {len(self.total_rewards)} trainings, mean reward {mean_reward:.3f}")
-                    self.writer.add_scalar("epsilon", self.agent.epsilon, self.epochs)
-                    self.writer.add_scalar("reward/mean", mean_reward, self.epochs)
-                    self.writer.add_scalar("reward/running", result['reward'], self.epochs)
-                    self.writer.add_scalar("metrics/f1, %", result['state'].f1, self.epochs)
-                    self.writer.add_scalar("metrics/size, %", result['state'].size, self.epochs)
+            if result is not None:
+                self.total_rewards.append(result['reward'])
+                mean_reward = np.mean(self.total_rewards[-20:])
+                self.logger.info(f"Done {len(self.total_rewards)} trainings, mean reward {mean_reward:.3f}")
+                self.writer.add_scalar("epsilon", self.agent.epsilon, self.epochs)
+                self.writer.add_scalar("reward/mean", mean_reward, self.epochs)
+                self.writer.add_scalar("reward/running", result['reward'], self.epochs)
+                self.writer.add_scalar("metrics/f1, %", result['state'].f1, self.epochs)
+                self.writer.add_scalar("metrics/size, %", result['state'].size, self.epochs)
 
-                    if mean_reward > self.best_mean_reward and self.epochs > 1000:
-                        self.logger.info(f'Best reward: {mean_reward}, saving model...')
-                        torch.save(self.agent.model.state_dict(), os.path.join(self.path, f'model{self.epochs}.sd.pt'))
-                        self.best_mean_reward = mean_reward
+                if mean_reward > self.best_mean_reward and self.epochs > 1000:
+                    self.logger.info(f'Best reward: {mean_reward}, saving model...')
+                    torch.save(self.agent.model.state_dict(), os.path.join(self.path, f'model{self.epochs}.sd.pt'))
+                    self.best_mean_reward = mean_reward
 
-                    if mean_reward > self.config.mean_reward_bound:
-                        self.logger.info(f"Solved in {self.epochs} epochs!")
-                        break
+                if mean_reward > self.config.mean_reward_bound:
+                    self.logger.info(f"Solved in {self.epochs} epochs!")
+                    break
 
-                if len(self.buffer) < self.config.buffer_start_size:
-                    continue
+            if len(self.buffer) < self.config.buffer_start_size:
+                continue
 
-                if self.epochs % self.config.sync_target_epochs == 0:
-                    self.agent.synchronize_target_model()
+            if self.epochs % self.config.sync_target_epochs == 0:
+                self.agent.synchronize_target_model()
 
-                self.optimizer.zero_grad()
-                batch = self.buffer.get_batch(batch_size=self.config.batch_size)
-                loss_t = calc_loss(batch=batch, agent=self.agent, gamma=self.config.gamma)
-                loss_t.backward()
-                self.optimizer.step()
-
-        finally:
+            self.optimizer.zero_grad()
+            batch = self.buffer.get_batch(batch_size=self.config.batch_size)
+            loss_t = calc_loss(batch=batch, agent=self.agent, gamma=self.config.gamma)
+            loss_t.backward()
+            self.optimizer.step()
             self.do_checkpoint()
-            self.writer.close()
 
     def do_checkpoint(self):
         checkpoint = {
