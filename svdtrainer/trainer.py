@@ -14,7 +14,7 @@ from svdtrainer.experience import ExperienceBuffer, CSVExperienceSource
 from svdtrainer.utils import calc_loss, save_config, Config
 
 
-ROOT = '/media/n31v/data/results/SVDRL'
+ROOT = '/media/n31v/data/results/SVDRL/train'
 
 
 class Trainer:

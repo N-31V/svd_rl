@@ -16,34 +16,12 @@ class Agent(ABC):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @abstractmethod
-    def __call__(self, state: torch.Tensor):
+    def __call__(self, state: State):
         """Have to implement the method that returns the agent's action at the current state."""
         return NotImplementedError
 
 
-class NNAgent(ABC):
-    """SVD NN agent base class.
-
-    Args:
-        model: Trainable model.
-        weight: Path to the model state_dict to load weights.
-        device: String passed to ``torch.device`` initialization.
-    """
-    def __init__(
-            self,
-            model: torch.nn.Module,
-            weight: Optional[str] = None,
-            device: str = 'cuda',
-    ):
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.device = torch.device(device)
-        self.model = model
-        if weight is not None:
-            self.model.load_state_dict(torch.load(weight, map_location=self.device))
-        self.model = self.model.to(self.device)
-
-
-class DQNAgent(NNAgent):
+class DQNAgent(Agent):
     """DQN agent class.
     Args:
         state_mask: List of observed state variables.
@@ -64,13 +42,14 @@ class DQNAgent(NNAgent):
             weight: Optional[str] = None,
             device: str = 'cuda',
     ):
+        super().__init__()
         self.actions = actions
         self.state_mask = state_mask
-        super().__init__(
-            model=SimpleFFDQN(len(state_mask), len(actions)),
-            weight=weight,
-            device=device
-        )
+        self.device = torch.device(device)
+        self.model = SimpleFFDQN(len(state_mask), len(actions))
+        if weight is not None:
+            self.model.load_state_dict(torch.load(weight, map_location=self.device))
+        self.model = self.model.to(self.device)
         self.target_model = copy.deepcopy(self.model)
         self.target_model.eval()
         self.epsilon = epsilon_start
@@ -150,6 +129,7 @@ class DQNAgent(NNAgent):
         return self.actions.index(action)
 
     def do_checkpoint(self) -> Dict:
+        """Create dictionary with current object state."""
         checkpoint = {
             'model': self.model.state_dict(),
             'target_model': self.target_model.state_dict(),
@@ -159,6 +139,7 @@ class DQNAgent(NNAgent):
         return checkpoint
 
     def load_checkpoint(self, checkpoint: Dict) -> None:
+        """Load state dictionary into object."""
         self.model.load_state_dict(checkpoint['model'])
         self.model.to(self.device)
         self.target_model.load_state_dict(checkpoint['target_model'])
@@ -187,6 +168,9 @@ class ManualAgent(Agent):
             Action.
         """
         self.logger.info(f'Current state: {state}')
-        action = self.actions[int(input(f'Possible actions: {self.actions}'))]
-        self.logger.info(f'Action: {action}')
-        return action
+        print(f'Possible actions: {self.actions}')
+        action = Actions(int(input()))
+        if action in self.actions:
+            self.logger.info(f'Action: {action}')
+            return action
+        print('Impossible action number!')

@@ -1,12 +1,12 @@
 """The module contains experiment configurations."""
 from svdtrainer.utils import Config
-from svdtrainer.enviroment import Actions
+from svdtrainer.enviroment import Actions, State
 
 CONFIGS = {
     'full': Config(
         name='full',
         actions=list(Actions),
-        state_mask=['f1', 'size', 'epoch', 'decomposition', 'hoer_factor']
+        state_mask=list(State._fields),
     ),
     'simple_pruning': Config(
         name='simple_pruning',

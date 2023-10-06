@@ -7,7 +7,7 @@ from configs import CONFIGS
 
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
-CONFIG = 'simple_pruning_epoch'
+CONFIG = 'light_pruning_epoch'
 CHECKPOINT = None
 
 
