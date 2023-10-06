@@ -11,7 +11,18 @@ from svdtrainer.enviroment import Actions, State
 
 
 class Agent(ABC):
-    """SVD agent base class.
+    """SVD agent base class."""
+    def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    @abstractmethod
+    def __call__(self, state: torch.Tensor):
+        """Have to implement the method that returns the agent's action at the current state."""
+        return NotImplementedError
+
+
+class NNAgent(ABC):
+    """SVD NN agent base class.
 
     Args:
         model: Trainable model.
@@ -31,13 +42,8 @@ class Agent(ABC):
             self.model.load_state_dict(torch.load(weight, map_location=self.device))
         self.model = self.model.to(self.device)
 
-    @abstractmethod
-    def __call__(self, state: torch.Tensor):
-        """Have to implement the method that returns the agent's action at the current state."""
-        return NotImplementedError
 
-
-class DQNAgent(Agent):
+class DQNAgent(NNAgent):
     """DQN agent class.
     Args:
         state_mask: List of observed state variables.
@@ -159,3 +165,28 @@ class DQNAgent(Agent):
         self.target_model.to(self.device)
         self.epsilon = checkpoint['epsilon']
         self.logger.info('Checkpoint loaded.')
+
+
+class ManualAgent(Agent):
+    """Manual agent class.
+    Args:
+        actions: List of possible actions in the environment.
+    """
+    def __init__(self, actions: List[Actions]):
+        self.actions = actions
+        super().__init__()
+        self.logger.info(f'Configurate manual agent: {actions=}.')
+
+    def __call__(self, state: State) -> Actions:
+        """Returns the agent's action at the current state.
+
+        Args:
+            state: The current state of the environment.
+
+        Returns:
+            Action.
+        """
+        self.logger.info(f'Current state: {state}')
+        action = self.actions[int(input(f'Possible actions: {self.actions}'))]
+        self.logger.info(f'Action: {action}')
+        return action

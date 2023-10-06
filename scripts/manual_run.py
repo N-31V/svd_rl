@@ -6,21 +6,18 @@ from datetime import datetime
 from sklearn.exceptions import UndefinedMetricWarning
 from torch.utils.tensorboard import SummaryWriter
 
-from svdtrainer.enviroment import SVDEnv, Actions
-from svdtrainer.agent import DQNAgent
-from configs import CONFIGS
+from svdtrainer.enviroment import SVDEnv, Actions, State
+from svdtrainer.agent import ManualAgent
+from svdtrainer.utils import Config
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
-CONFIG = 'simple_pruning_epoch'
-DATE = 'Sep29_17-04'
-ROOT = os.path.join('/media/n31v/data/results/SVDRL', CONFIG, DATE)
+ROOT = '/media/n31v/data/results/SVDRL/manual'
 DEVICE = 'cuda'
-MODEL = 'model8759.sd.pt'
 
 
 if __name__ == "__main__":
-    config = CONFIGS[CONFIG]
+    config = Config(name='manual', actions=list(Actions), state_mask=list(State._fields), start_epoch=10)
     current_time = datetime.now().strftime("%b%d_%H-%M")
     path = os.path.join(ROOT, f'test_{current_time}')
     writer = SummaryWriter(log_dir=path)
@@ -45,15 +42,7 @@ if __name__ == "__main__":
         device=DEVICE,
         train_compose=(Actions.train_compose in config.actions)
     )
-    agent = DQNAgent(
-        state_mask=config.state_mask,
-        actions=config.actions,
-        device=DEVICE,
-        epsilon_start=config.epsilon_start,
-        epsilon_final=config.epsilon_final,
-        epsilon_step=config.epsilon_step,
-        weight=os.path.join(ROOT, MODEL)
-    )
+    agent = ManualAgent(actions=config.actions)
     total_reward = 0
     epoch = config.start_epoch
     done = False
@@ -61,7 +50,7 @@ if __name__ == "__main__":
 
     while not done:
         epoch += 1
-        action = agent.best_action(state)
+        action = agent(state)
         print(f'{epoch}: {action}')
         state, reward, done = env.step(action)
         total_reward = state.f1 + config.size_factor * (1 - state.size)
