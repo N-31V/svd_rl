@@ -39,6 +39,7 @@ class DQNAgent(Agent):
             epsilon_start: float,
             epsilon_final: float,
             epsilon_step: float,
+            n_steps: int,
             weight: Optional[str] = None,
             device: str = 'cuda',
     ):
@@ -46,7 +47,7 @@ class DQNAgent(Agent):
         self.actions = actions
         self.state_mask = state_mask
         self.device = torch.device(device)
-        self.model = SimpleFFDQN(len(state_mask), len(actions))
+        self.model = SimpleFFDQN(len(state_mask) * n_steps, len(actions))
         if weight is not None:
             self.model.load_state_dict(torch.load(weight, map_location=self.device))
         self.model = self.model.to(self.device)
@@ -122,7 +123,7 @@ class DQNAgent(Agent):
         """
         state = state._asdict()
         state = [state[s] for s in self.state_mask]
-        return torch.tensor(state, dtype=torch.float32)
+        return torch.flatten(torch.tensor(state, dtype=torch.float32))
 
     def action_index(self, action: Actions):
         """Returns action index."""
