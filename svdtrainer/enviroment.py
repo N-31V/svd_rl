@@ -59,8 +59,9 @@ class SVDEnv:
     ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.base_f1 = f1_baseline
-        self.train_dl: DataLoader = DataLoader(dataset=train_ds, shuffle=True, **dataloader_params)
-        self.val_dl: DataLoader = DataLoader(dataset=val_ds, shuffle=False, **dataloader_params)
+        self.train_ds: Dataset = train_ds
+        self.val_ds: Dataset = val_ds
+        self.dl_params: Dict = dataloader_params
         self.model: Type[torch.nn.Module] = model
         self.model_params: Dict = model_params
         self.decomposing_mode = decomposing_mode
@@ -75,13 +76,16 @@ class SVDEnv:
 
         self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
         self.orthogonal_loss: OrthogonalLoss = OrthogonalLoss(factor=10)
-        self.exp: ClassificationExperimenter = None
-        self.optimizer: torch.optim.Optimizer = None
         self.decomposition: bool = False
         self.epoch: int = 0
         self.base_params: int = 0
         self.last_f1: float = 0.
         self.last_params: float = 1
+
+        self.train_dl: DataLoader = None
+        self.val_dl: DataLoader = None
+        self.exp: ClassificationExperimenter = None
+        self.optimizer: torch.optim.Optimizer = None
         self.logger.info('Environment configured.')
 
     def get_state(self) -> State:
@@ -99,6 +103,8 @@ class SVDEnv:
 
     def reset(self) -> State:
         self.logger.info('Resetting environment...')
+        self.train_dl = DataLoader(dataset=self.train_ds, shuffle=True, **self.dl_params)
+        self.val_dl = DataLoader(dataset=self.val_ds, shuffle=False, **self.dl_params)
         model = self.model(**self.model_params)
         decompose_module(model=model, forward_mode='two_layers')
         self.decomposition = False

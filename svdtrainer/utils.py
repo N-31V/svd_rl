@@ -34,7 +34,7 @@ class Config:
     running_reward: bool = False
     size_factor: float = 0.1
     lr_scheduler: Optional[Callable] = None
-    mean_reward_bound: float = 1.05
+    mean_reward_bound: float = 1.09
     gamma: float = 1
     lr: float = 0.0001
     batch_size: int = 32
