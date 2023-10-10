@@ -1,4 +1,4 @@
-from typing import Type, Dict, Tuple
+from typing import Type, Dict, Tuple, Optional, Callable
 import collections
 import enum
 from functools import partial
@@ -6,6 +6,7 @@ import logging
 
 import torch.nn
 from torch.utils.data import Dataset, DataLoader
+from torch.optim.lr_scheduler import LRScheduler
 from fedot_ind.core.architecture.experiment.nn_experimenter import ClassificationExperimenter
 from fedot_ind.core.operation.optimization.svd_tools import decompose_module, energy_svd_pruning
 from fedot_ind.core.operation.decomposition.decomposed_conv import DecomposedConv2d
@@ -45,25 +46,31 @@ class SVDEnv:
             train_ds: Dataset,
             val_ds: Dataset,
             model: Type[torch.nn.Module],
+            model_params: Dict,
+            dataloader_params: Dict,
             decomposing_mode: str,
             epochs: int,
             start_epoch: int,
             train_compose: bool,
             skip_impossible_steps: bool,
             size_factor: float,
+            lr_scheduler: Optional[Callable],
             device: str = 'cuda'
     ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.base_f1 = f1_baseline
-        self.train_dl: DataLoader = DataLoader(dataset=train_ds, batch_size=32, shuffle=True, num_workers=8)
-        self.val_dl: DataLoader = DataLoader(dataset=val_ds, batch_size=32, shuffle=False, num_workers=8)
+        self.train_dl: DataLoader = DataLoader(dataset=train_ds, shuffle=True, **dataloader_params)
+        self.val_dl: DataLoader = DataLoader(dataset=val_ds, shuffle=False, **dataloader_params)
         self.model: Type[torch.nn.Module] = model
+        self.model_params: Dict = model_params
         self.decomposing_mode = decomposing_mode
         self.epochs = epochs
         self.start_epoch: int = start_epoch
         self.train_compose = train_compose
         self.skip = skip_impossible_steps
         self.size_factor = size_factor
+        self.lr_scheduler: Optional[Callable] = lr_scheduler
+        self.scheduler: Optional[LRScheduler] = None
         self.device = device
 
         self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
@@ -92,13 +99,12 @@ class SVDEnv:
 
     def reset(self) -> State:
         self.logger.info('Resetting environment...')
-        num_classes = len(self.train_dl.dataset.class_to_idx)
-        model = self.model(num_classes=num_classes)
+        model = self.model(**self.model_params)
         decompose_module(model=model, forward_mode='two_layers')
         self.decomposition = False
         self.exp = ClassificationExperimenter(model=model, device=self.device)
         self.epoch = 0
-        self.optimizer = torch.optim.Adam(self.exp.model.parameters())
+        self.reset_lr()
         self.base_params = self.exp.number_of_model_params()
         self.last_f1 = 0.
         self.last_params = 1
@@ -107,6 +113,11 @@ class SVDEnv:
         if not self.train_compose:
             self.decompose_model()
         return self.get_state()
+
+    def reset_lr(self):
+        self.optimizer = torch.optim.Adam(self.exp.model.parameters())
+        if self.lr_scheduler is not None:
+            self.scheduler = self.lr_scheduler(self.optimizer)
 
     def step(self, action: Actions) -> Tuple[State, float, bool]:
         if action == Actions.train_compose:
@@ -160,6 +171,8 @@ class SVDEnv:
             model_losses=svd_loss
         )
         val_scores = self.exp.val_loop(dataloader=self.val_dl)
+        if self.lr_scheduler is not None:
+            self.scheduler.step()
         p_f1 = val_scores['f1'] / self.base_f1
         p_params = self.exp.number_of_model_params() / self.base_params
         d_f1 = p_f1 - self.last_f1
@@ -174,6 +187,7 @@ class SVDEnv:
             func=partial(energy_svd_pruning, energy_threshold=e),
             condition=_layer_filer
         )
+        self.reset_lr()
 
     def decompose_model(self):
         self.exp._apply_function(
