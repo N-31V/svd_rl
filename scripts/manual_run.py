@@ -8,7 +8,7 @@ from svdtrainer.runner import run_svd_training
 
 ROOT = '/media/n31v/data/results/SVDRL/test/manual'
 DEVICE = 'cuda'
-CONFIG = 'simple_pruning_epoch'
+CONFIG = 'light_pruning_epoch'
 
 
 if __name__ == "__main__":
@@ -18,11 +18,14 @@ if __name__ == "__main__":
         train_ds=config.train_ds,
         val_ds=config.val_ds,
         model=config.model,
+        model_params=config.model_params,
+        dataloader_params=config.dataloader_params,
         decomposing_mode=config.decomposing_mode,
         epochs=config.epochs,
         start_epoch=config.start_epoch,
         skip_impossible_steps=config.skip_impossible_steps,
         size_factor=config.size_factor,
+        lr_scheduler=config.lr_scheduler,
         device=DEVICE,
         train_compose=(Actions.train_compose in config.actions)
     )

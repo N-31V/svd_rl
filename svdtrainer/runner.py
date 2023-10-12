@@ -26,7 +26,12 @@ def run_svd_training(config: Config, env: SVDEnv, agent: Agent, path: str):
     epoch = config.start_epoch
     done = False
     state = env.reset()
-
+    total_reward = state.f1 + config.size_factor * (1 - state.size)
+    writer.write_scores(
+        phase='val',
+        scores={'action': 0, 'total_reward': total_reward, 'running_reward': 0, **state._asdict()},
+        x=epoch
+    )
     while not done:
         epoch += 1
         print(f'Epoch {epoch}')
