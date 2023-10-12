@@ -1,6 +1,6 @@
 """This module contains helper functions for training."""
-from typing import Tuple, List, Type
-from dataclasses import dataclass
+from typing import Tuple, List, Type, Dict, Optional, Callable
+from dataclasses import dataclass, field
 import os
 import torch
 from torch.utils.data import Dataset
@@ -25,13 +25,16 @@ class Config:
     train_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), transform=ToTensor())
     val_ds: Dataset = CIFAR10(root=os.path.join(DATASETS_ROOT, 'CIFAR10'), train=False, transform=ToTensor())
     model: Type[torch.nn.Module] = resnet18
+    model_params: Dict = field(default_factory=lambda: {'num_classes': 10})
+    dataloader_params: Dict = field(default_factory=lambda: {'batch_size': 32, 'num_workers': 8})
     decomposing_mode: str = 'spatial'
     epochs: int = 30
     start_epoch: int = 0
     skip_impossible_steps: bool = False
     running_reward: bool = False
     size_factor: float = 0.1
-    mean_reward_bound: float = 1.05
+    lr_scheduler: Optional[Callable] = None
+    mean_reward_bound: float = 1.09
     gamma: float = 1
     lr: float = 0.0001
     batch_size: int = 32
@@ -41,6 +44,7 @@ class Config:
     epsilon_start: float = 1.
     epsilon_final: float = 0.001
     epsilon_step: float = 10**-4
+    n_steps: int = 1
 
 
 def save_config(config: Config, path: str) -> None:

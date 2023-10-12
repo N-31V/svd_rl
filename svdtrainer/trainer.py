@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from svdtrainer.enviroment import SVDEnv, Actions
 from svdtrainer.agent import DQNAgent
-from svdtrainer.experience import ExperienceBuffer, CSVExperienceSource
+from svdtrainer.experience import ExperienceBuffer, NStepsCSVExperienceSource
 from svdtrainer.utils import calc_loss, save_config, Config
 
 
@@ -40,11 +40,14 @@ class Trainer:
             train_ds=config.train_ds,
             val_ds=config.val_ds,
             model=config.model,
+            model_params=config.model_params,
+            dataloader_params=config.dataloader_params,
             decomposing_mode=config.decomposing_mode,
             epochs=config.epochs,
             start_epoch=config.start_epoch,
             skip_impossible_steps=config.skip_impossible_steps,
             size_factor=config.size_factor,
+            lr_scheduler=config.lr_scheduler,
             device=device,
             train_compose=(Actions.train_compose in config.actions)
         )
@@ -55,14 +58,16 @@ class Trainer:
             epsilon_start=config.epsilon_start,
             epsilon_final=config.epsilon_final,
             epsilon_step=config.epsilon_step,
+            n_steps=config.n_steps
         )
         self.buffer = ExperienceBuffer(capacity=config.buffer_size)
-        self.source = CSVExperienceSource(
+        self.source = NStepsCSVExperienceSource(
             env=self.env,
             agent=self.agent,
             buffer=self.buffer,
             running_reward=config.running_reward,
-            csv_file='experience.csv'
+            csv_file='experience.csv',
+            n_steps=config.n_steps
         )
 
         self.optimizer = torch.optim.Adam(self.agent.model.parameters(), lr=config.lr)
