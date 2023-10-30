@@ -53,5 +53,13 @@ CONFIGS = {
         name='simple_dec',
         actions=[Actions.train_compose, Actions.train_decompose, Actions.prune_9],
         state_mask=['decomposition', 'epoch', 'f1', 'size'],
+    ),
+    'simple_dec_3_step': Config(
+        name='simple_dec_3step',
+        actions=[Actions.train_compose, Actions.train_decompose, Actions.prune_9],
+        state_mask=['decomposition', 'epoch', 'f1', 'size'],
+        n_steps=3,
+        epsilon_step=10 ** -3,
+        size_factor=0.05
     )
 }
