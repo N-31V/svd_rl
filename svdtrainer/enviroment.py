@@ -90,7 +90,6 @@ class SVDEnv:
             size=self.last_params / self.base_params,
             step=self.step / self.max_steps,
             decomposition=float(self.decomposition.value),
-            hoer_factor=self.hoer_loss.factor
         )
         return state
 
