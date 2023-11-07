@@ -7,7 +7,7 @@ from configs import CONFIGS
 
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
-CONFIG = 'light_pruning_epoch'
+CONFIG = 'cifar10_light_pruning_epoch_3_step'
 CHECKPOINT = None
 
 

@@ -1,6 +1,4 @@
-from typing import Type, Dict, Tuple, Optional, Callable
-import collections
-import enum
+from typing import Type, Dict, Tuple, Optional, Union
 from functools import partial
 import logging
 
@@ -12,26 +10,15 @@ from fedot_ind.core.operation.optimization.svd_tools import decompose_module, en
 from fedot_ind.core.operation.decomposition.decomposed_conv import DecomposedConv2d
 from fedot_ind.core.metrics.loss.svd_loss import HoyerLoss, OrthogonalLoss
 
-
-State = collections.namedtuple('State', ['f1', 'size', 'epoch', 'decomposition', 'hoer_factor'])
-
-
-class Actions(enum.Enum):
-    train_compose = 0
-    train_decompose = 1
-    prune_99 = 2
-    prune_9 = 3
-    prune_7 = 4
-    prune_5 = 5
-    increase_hoer = 6
-    decrease_hoer = 7
+from svdtrainer.state import State
+from svdtrainer.actions import Actions
 
 
 def _compose_layer(layer: DecomposedConv2d):
     layer.compose()
 
 
-def _decompose_layer(layer: DecomposedConv2d, decomposing_mode='spatial'):
+def _decompose_layer(layer: DecomposedConv2d, decomposing_mode: str):
     layer.decompose(decomposing_mode=decomposing_mode)
 
 
@@ -42,36 +29,38 @@ def _layer_filer(layer: torch.nn.Module):
 class SVDEnv:
     def __init__(
             self,
-            f1_baseline: float,
             train_ds: Dataset,
             val_ds: Dataset,
-            model: Type[torch.nn.Module],
-            model_params: Dict,
             dataloader_params: Dict,
+            model: Union[Type[torch.nn.Module], partial],
+            weights: Optional[str],
             decomposing_mode: str,
+            f1_baseline: float,
             epochs: int,
             start_epoch: int,
             train_compose: bool,
-            skip_impossible_steps: bool,
-            size_factor: float,
-            lr_scheduler: Optional[Callable],
+            optimizer: Union[Type[torch.optim.Optimizer], partial],
+            lr_scheduler: Optional[Union[Type[LRScheduler], partial]],
             device: str = 'cuda'
     ) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.base_f1 = f1_baseline
+
         self.train_ds: Dataset = train_ds
         self.val_ds: Dataset = val_ds
         self.dl_params: Dict = dataloader_params
+
         self.model: Type[torch.nn.Module] = model
-        self.model_params: Dict = model_params
+        self.weights = weights
         self.decomposing_mode = decomposing_mode
-        self.epochs = epochs
+
+        self.base_f1: float = f1_baseline
+        self.epochs: int = epochs
         self.start_epoch: int = start_epoch
-        self.train_compose = train_compose
-        self.skip = skip_impossible_steps
-        self.size_factor = size_factor
-        self.lr_scheduler: Optional[Callable] = lr_scheduler
-        self.scheduler: Optional[LRScheduler] = None
+        self.train_compose: bool = train_compose
+
+        self.optimizer_type: Type[torch.optim.Optimizer] = optimizer
+        self.lr_scheduler_type: Optional[Type[LRScheduler]] = lr_scheduler
+
         self.device = device
 
         self.hoer_loss: HoyerLoss = HoyerLoss(factor=0.1)
@@ -86,9 +75,11 @@ class SVDEnv:
         self.val_dl: DataLoader = None
         self.exp: ClassificationExperimenter = None
         self.optimizer: torch.optim.Optimizer = None
+        self.lr_scheduler: Optional[LRScheduler] = None
         self.logger.info('Environment configured.')
 
     def get_state(self) -> State:
+        """Returns current state."""
         state = State(
             f1=self.last_f1,
             size=self.last_params,
@@ -105,27 +96,27 @@ class SVDEnv:
         self.logger.info('Resetting environment...')
         self.train_dl = DataLoader(dataset=self.train_ds, shuffle=True, **self.dl_params)
         self.val_dl = DataLoader(dataset=self.val_ds, shuffle=False, **self.dl_params)
-        model = self.model(**self.model_params)
+
+        model = self.model()
         decompose_module(model=model, forward_mode='two_layers')
         self.decomposition = False
-        self.exp = ClassificationExperimenter(model=model, device=self.device)
+        self.exp = ClassificationExperimenter(model=model, weights=self.weights, device=self.device)
         self.epoch = 0
-        self.reset_lr()
+        self.reset_optimizer()
         self.base_params = self.exp.number_of_model_params()
-        self.last_f1 = 0.
-        self.last_params = 1
+        self.update_state()
         while self.epoch < self.start_epoch:
             self._step()
         if not self.train_compose:
             self.decompose_model()
         return self.get_state()
 
-    def reset_lr(self):
-        self.optimizer = torch.optim.Adam(self.exp.model.parameters())
-        if self.lr_scheduler is not None:
-            self.scheduler = self.lr_scheduler(self.optimizer)
+    def reset_optimizer(self):
+        self.optimizer = self.optimizer_type(self.exp.model.parameters())
+        if self.lr_scheduler_type is not None:
+            self.lr_scheduler = self.lr_scheduler_type(self.optimizer)
 
-    def step(self, action: Actions) -> Tuple[State, float, bool]:
+    def step(self, action: Actions) -> Tuple[State, bool]:
         if action == Actions.train_compose:
             if self.decomposition:
                 self.compose_model()
@@ -134,66 +125,51 @@ class SVDEnv:
         if action == Actions.train_decompose:
             if not self.decomposition:
                 self.decompose_model()
-            return self._step(self.svd_loss)
+            return self._step()
 
         if self.decomposition:
             if action == Actions.prune_99:
                 self.prune_model(e=0.99)
-                return self._step(self.svd_loss)
-
-            if action == Actions.prune_9:
+            elif action == Actions.prune_9:
                 self.prune_model(e=0.9)
-                return self._step(self.svd_loss)
-
-            if action == Actions.prune_7:
+            elif action == Actions.prune_7:
                 self.prune_model(e=0.7)
-                return self._step(self.svd_loss)
-
-            if action == Actions.prune_5:
+            elif action == Actions.prune_5:
                 self.prune_model(e=0.5)
-                return self._step(self.svd_loss)
-
-            if action == Actions.increase_hoer:
+            elif action == Actions.increase_hoer:
                 self.hoer_loss = HoyerLoss(factor=self.hoer_loss.factor*10)
-                return self._step(self.svd_loss)
-
-            if action == Actions.decrease_hoer:
+            elif action == Actions.decrease_hoer:
                 self.hoer_loss = HoyerLoss(factor=self.hoer_loss.factor/10)
-                return self._step(self.svd_loss)
+            return self._step()
 
         else:
-            if self.skip:
-                self.logger.info('Impossible action, skipping a step.')
-            else:
-                self.epoch += 1
-                self.logger.info('Impossible action, step lost.')
-            return self.get_state(), 0, self.is_done()
+            self.epoch += 1
+            self.logger.info('Impossible action, step lost.')
+            return self.get_state(), self.is_done()
 
-    def _step(self, svd_loss=None) -> Tuple[State, float, bool]:
+    def _step(self) -> Tuple[State, bool]:
         self.epoch += 1
         train_score = self.exp.train_loop(
             dataloader=self.train_dl,
             optimizer=self.optimizer,
-            model_losses=svd_loss
+            model_losses=self.svd_loss if self.decomposition else None
         )
+        self.update_state()
+        if self.lr_scheduler_type is not None:
+            self.lr_scheduler.step()
+        return self.get_state(), self.is_done()
+
+    def update_state(self):
         val_scores = self.exp.val_loop(dataloader=self.val_dl)
-        if self.lr_scheduler is not None:
-            self.scheduler.step()
-        p_f1 = val_scores['f1'] / self.base_f1
-        p_params = self.exp.number_of_model_params() / self.base_params
-        d_f1 = p_f1 - self.last_f1
-        d_params = self.last_params - p_params
-        reward = float(d_f1 + self.size_factor * d_params)
-        self.last_f1 = p_f1
-        self.last_params = p_params
-        return self.get_state(), reward, self.is_done()
+        self.last_f1 = val_scores['f1'] / self.base_f1
+        self.last_params = self.exp.number_of_model_params() / self.base_params
 
     def prune_model(self, e: float):
         self.exp._apply_function(
             func=partial(energy_svd_pruning, energy_threshold=e),
             condition=_layer_filer
         )
-        self.reset_lr()
+        # self.reset_optimizer()
 
     def decompose_model(self):
         self.exp._apply_function(
