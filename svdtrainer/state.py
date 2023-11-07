@@ -2,7 +2,7 @@ from typing import Optional, List, Dict
 from collections import deque, namedtuple
 import torch
 
-state_fields = ['f1', 'size', 'epoch', 'decomposition', 'hoer_factor']
+state_fields = ['f1', 'size', 'step', 'decomposition']
 
 State = namedtuple('State', state_fields)
 
