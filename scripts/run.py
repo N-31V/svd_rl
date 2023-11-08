@@ -6,9 +6,9 @@ from configs import CONFIGS
 
 
 ROOT = '/media/n31v/data/results/SVDRL'
-CONFIG = 'cifar10_light_pruning_epoch_3_step'
-DATE = 'Nov03_18-00'
-MODEL = 'model26540.sd.pt'
+CONFIG = 'full_x3'
+DATE = 'Nov07_18-46'
+MODEL = 'model22472.sd.pt'
 
 
 if __name__ == "__main__":
@@ -16,5 +16,5 @@ if __name__ == "__main__":
     run_svd_training(
         config=config,
         weight=os.path.join(ROOT, 'train', CONFIG, DATE, MODEL),
-        path=os.path.join(ROOT, 'test', CONFIG)
+        path=os.path.join(ROOT, 'test', CONFIG, MODEL.split('.')[0])
     )
