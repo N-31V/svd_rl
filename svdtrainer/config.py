@@ -47,7 +47,7 @@ class Config:
     dataloader_params: Dict = field(default_factory=lambda: {'batch_size': 128, 'num_workers': 8})
     f1_baseline: float = 0.885
     max_steps: int = 15
-    svd_optimizer: Union[Type[Optimizer], partial] = partial(Adam, lr=0.001)
+    svd_optimizer: Union[Type[Optimizer], partial] = partial(Adam, lr=0.00001)
     lr_scheduler: Optional[Union[Type[LRScheduler], partial]] = partial(CosineAnnealingLR, T_max=15)
     agent_optimizer: Union[Type[Optimizer], partial] = partial(Adam, lr=0.0001)
     gamma: float = 1

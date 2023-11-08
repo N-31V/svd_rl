@@ -2,6 +2,7 @@
 from functools import partial
 from svdtrainer.config import Config
 from svdtrainer.state import NState
+from svdtrainer.actions import ActionConverter, Actions
 from cv_models.resnet import resnet20
 
 
@@ -11,6 +12,11 @@ CONFIGS = {
     ),
     'full_x3': Config(
         name='full_x3',
+        state=partial(NState, n=3),
+    ),
+    'light_x3': Config(
+        name='light_x3',
+        actions=ActionConverter(actions=[Actions.stop, Actions.train, Actions.channel, Actions.spatial, Actions.prune_999, Actions.prune_99]),
         state=partial(NState, n=3),
     ),
     'resnet20_full_x3': Config(

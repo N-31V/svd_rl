@@ -14,8 +14,6 @@ from svdtrainer.config import Config
 def run_svd_training(config: Config, weight: str, path: str, manual: bool = False):
     warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
     path = os.path.join(path, datetime.now().strftime("%b%d_%H-%M"))
-    if manual:
-        path = os.path.join(path, 'manual')
     writer = WriterComposer(path=path, writers=[TFWriter, CSVWriter])
     logging.basicConfig(
         level=logging.INFO,
