@@ -5,14 +5,14 @@ import enum
 
 class Actions(enum.Enum):
     """List of actions in environment."""
-    train_compose = 0
-    train_decompose = 1
-    prune_99 = 2
-    prune_9 = 3
-    prune_7 = 4
-    prune_5 = 5
-    increase_hoer = 6
-    decrease_hoer = 7
+    stop = 0
+    train = 1
+    channel = 2
+    spatial = 3
+    prune_999 = 4
+    prune_99 = 5
+    prune_9 = 6
+    prune_7 = 7
 
 
 class ActionConverter:

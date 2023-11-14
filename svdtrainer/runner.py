@@ -9,14 +9,11 @@ from svdtrainer.enviroment import SVDEnv
 from svdtrainer.agent import DQNAgent, ManualAgent
 from svdtrainer.strategies import BestActionStrategy
 from svdtrainer.config import Config
-from svdtrainer.agent import Actions
 
 
 def run_svd_training(config: Config, weight: str, path: str, manual: bool = False):
     warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
     path = os.path.join(path, datetime.now().strftime("%b%d_%H-%M"))
-    if manual:
-        path = os.path.join(path, 'manual')
     writer = WriterComposer(path=path, writers=[TFWriter, CSVWriter])
     logging.basicConfig(
         level=logging.INFO,
@@ -33,13 +30,10 @@ def run_svd_training(config: Config, weight: str, path: str, manual: bool = Fals
         model=config.model,
         weights=config.weights,
         dataloader_params=config.dataloader_params,
-        decomposing_mode=config.decomposing_mode,
         f1_baseline=config.f1_baseline,
-        epochs=config.epochs,
-        start_epoch=config.start_epoch,
+        max_steps=config.max_steps,
         optimizer=config.svd_optimizer,
         lr_scheduler=config.lr_scheduler,
-        train_compose=(Actions.train_compose in config.actions.possible_actions)
     )
     state = env.reset()
     n_state = config.state(state=state)
@@ -53,24 +47,24 @@ def run_svd_training(config: Config, weight: str, path: str, manual: bool = Fals
             weight=weight
         )
 
-    epoch = config.start_epoch
+    step = 0
     done = False
     total_reward = config.reward(state=state)
     writer.write_scores(
         phase='val',
         scores={'action': 0, 'total_reward': total_reward, **state._asdict()},
-        x=epoch
+        x=step
     )
     while not done:
-        epoch += 1
-        print(f'Epoch {epoch}')
+        step += 1
+        print(f'step {step}')
         action = agent(n_state)
-        state, done = env.step(action)
+        state, done = env.do_step(action)
         n_state.update(state=state)
         total_reward = config.reward(state=state)
         writer.write_scores(
             phase='val',
             scores={'action': action.value, 'total_reward': total_reward, **state._asdict()},
-            x=epoch
+            x=step
         )
     env.exp.save_model(os.path.join(path, 'trained_model'))

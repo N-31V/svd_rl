@@ -36,8 +36,8 @@ class DataCache:
 
     def create_csv(self):
         tmp_df = pd.DataFrame(
-            columns=['f1', 'size', 'epoch', 'dec', 'hoer', 'action', 'done',
-                     'n_f1', 'n_size', 'n_epoch', 'n_dec', 'n_hoer']
+            columns=['f1', 'size', 'step', 'dec', 'action', 'done',
+                     'n_f1', 'n_size', 'n_step', 'n_dec']
         )
         tmp_df.to_csv(self.csv_file)
         self.logger.info('CSV file created successfully.')
@@ -50,8 +50,8 @@ class DataCache:
         for i in range(self.csv_len):
             series = tmp_df.iloc[i]
 
-            last_state = State(series['f1'], series['size'], series['epoch'], series['dec'], series['hoer'])
-            next_state = State(series['n_f1'], series['n_size'], series['n_epoch'], series['n_dec'], series['n_hoer'])
+            last_state = State(series['f1'], series['size'], series['step'], series['dec'])
+            next_state = State(series['n_f1'], series['n_size'], series['n_step'], series['n_dec'])
             reward = config.reward(next_state) if series['done'] else 0
 
             if n_state is None:
