@@ -114,7 +114,7 @@ class Trainer:
             if len(self.buffer) < self.config.buffer_start_size:
                 continue
 
-            if self.steps % self.config.sync_target_epochs == 0:
+            if self.steps % self.config.sync_target_steps == 0:
                 self.agent.synchronize_target_model()
 
             self.optimizer.zero_grad()

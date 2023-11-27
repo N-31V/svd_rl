@@ -54,7 +54,7 @@ class Config:
     batch_size: int = 32
     buffer_size: int = 1000000
     buffer_start_size: int = 1000
-    sync_target_epochs: int = 600
+    sync_target_steps: int = 600
 
 
 def save_config(config: Config, path: str) -> None:
